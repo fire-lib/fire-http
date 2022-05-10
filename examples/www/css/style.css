@@ -1,0 +1,9 @@
+* {
+	display: block;
+	margin: 0;
+	padding: 0;
+}
+
+.check-utf8::after {
+	content: "utf8 chöck";
+}
