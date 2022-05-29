@@ -1,11 +1,14 @@
 [package]
 name = "fire-http"
 description = "Http async library based on hyper and tokio"
-version = "0.2.10"
+version = "0.2.11"
 authors = ["Sören Meier <info@s-me.ch>"]
 repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [features]
 default = ["http1"]

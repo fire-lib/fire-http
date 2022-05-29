@@ -17,16 +17,18 @@ use http::{Response, Body};
 
 #[derive(Debug, Clone)]
 pub struct Range {
-	start: usize,
-	end: Option<usize>
+	pub start: usize,
+	pub end: Option<usize>
 }
 
 impl Range {
 
-	pub fn parse( header: &RequestHeader ) -> Option<Self> {
+	pub fn parse(header: &RequestHeader) -> Option<Self> {
 
 		let range = header.value("range")?;
-		if !range.starts_with("bytes=") { return None }
+		if !range.starts_with("bytes=") {
+			return None
+		}
 
 		let mut range = range[6..].split('-');
 
@@ -36,7 +38,9 @@ impl Range {
 		let end = range.next()?;
 		let end: Option<usize> = if end != "" {
 			Some(end.parse().ok()?)
-		} else { None };
+		} else {
+			None
+		};
 
 		Some(Self { start, end })
 	}
