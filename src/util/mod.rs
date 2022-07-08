@@ -88,3 +88,12 @@ fn validate_content_length(response: &Response) -> Option<()> {
 
 	Some(())
 }
+
+macro_rules! trace {
+	($($tt:tt)*) => (
+		#[cfg(feature = "trace")]
+		{
+			tracing::trace!($($tt)*);
+		}
+	)
+}

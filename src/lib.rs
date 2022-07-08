@@ -6,12 +6,13 @@ use routes::{Routes, RawRoute, Route, Catcher};
 pub mod parse;
 use parse::socket::{ParseResult, ParseSocketAddr};
 
+#[macro_use]
 pub mod util;
 
 pub mod into;
 
 pub mod error;
-pub use error::{ Result, Error };
+pub use error::{Result, Error};
 
 pub mod request;
 
@@ -38,9 +39,6 @@ pub use http;
 pub use http::header;
 pub use http::body;
 pub use http::response;
-
-use log_to_stdout::init_log_traits;
-init_log_traits!();
 
 /// Prepares a server.
 pub fn build<A, D>(addr: A, data: D) -> ParseResult<FireBuilder<D>>

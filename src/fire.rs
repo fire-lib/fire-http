@@ -2,19 +2,17 @@
 use crate::request::{HyperRequest, RequestBuilder};
 use crate::util::convert_fire_res_to_hyper_res;
 use crate::routes::Routes;
-use crate::log_traits::*;
 
 use std::sync::Arc;
 use std::net::SocketAddr;
 use std::convert::Infallible;
 use std::time::Duration;
 
-use http::header::{ /*RequestHeader,*/ StatusCode };
+use tracing::error;
+
+use http::header::StatusCode;
 use http::response::Response;
 use http::body::FireHttpBody;
-
-use log_to_stdout::{ info, warn, error };
-
 
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 // same as page size
@@ -95,8 +93,9 @@ pub async fn route<D>(
 	hyper_req: HyperRequest,
 	address: SocketAddr
 ) -> Response {
+	// todo use a tracing span
 
-	info!("Request {} {}", hyper_req.method(), hyper_req.uri());
+	trace!("Request {} {}", hyper_req.method(), hyper_req.uri());
 
 	let mut builder = RequestBuilder::new(hyper_req, address, wood.configs());
 
@@ -109,7 +108,7 @@ pub async fn route<D>(
 			match res {
 				Some(Ok(res)) => Some(res),
 				Some(Err(e)) => {
-					error!("RawRoute: {:?}", e);
+					error!("RawRoute returned an error {:?}", e);
 					Some(e.status_code().into())
 				},
 				None => None
@@ -121,7 +120,7 @@ pub async fn route<D>(
 	let mut req = match builder.into_fire() {
 		Ok(r) => r,
 		Err(e) => {
-			warn!("Hyper Request Parsing error {:?}", e);
+			error!("Hyper Request Parsing error {:?}", e);
 			return StatusCode::BadRequest.into()
 		}
 	};
@@ -141,7 +140,11 @@ pub async fn route<D>(
 				match result {
 					Ok(res) => res,
 					Err(e) => {
-						error!("Route: {:?} {:?}", req.header().uri().path(), e);
+						error!(
+							"Route error: {:?} {:?}",
+							req.header().uri().path(),
+							e
+						);
 						e.status_code().into()
 					}
 				}
@@ -157,12 +160,15 @@ pub async fn route<D>(
 	#[allow(unused_assignments)]
 	let req_header = req.header();
 	let res_header = response.header();
-	match wood.routes().route_catcher(req_header, res_header) {
+	let resp = match wood.routes().route_catcher(req_header, res_header) {
 		Some(route) => {
 			route.call(req, response, wood.data()).await
 				.unwrap_or_else(|e| e.status_code().into())
 		},
 		None => response
-	}
-	.always_info("Response: ")
+	};
+
+	trace!("Response {:?}", resp);
+
+	resp
 }

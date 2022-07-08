@@ -1,7 +1,7 @@
 
 use std::str::Utf8Error;
 
-use log_to_stdout::error;
+use tracing::{error, warn};
 
 #[doc(hidden)]
 pub use hyper::upgrade;
@@ -41,22 +41,46 @@ ws_route!(MyRoute, "path", |ws, data| {
 /// Because this spawns a new task it will clone every used data
 #[macro_export]
 macro_rules! ws_route {
-	($name:ident, $($tt:tt)* ) => (
+	($name:ident, $($tt:tt)*) => (
 		$crate::ws_route!($name<Data>, $($tt)*);
 	);
-	($name:ident<$data_ty:ty>, $path:expr, |$ws:ident| $block:block ) => (
+	(
+		$name:ident<$data_ty:ty>, $path:expr,
+		|$ws:ident| $block:block
+	) => (
 		$crate::ws_route!($name<$data_ty>, $path, |$ws,| -> () $block);
 	);
-	($name:ident<$data_ty:ty>, $path:expr, |$ws:ident| -> $ret_type:ty $block:block ) => (
+	(
+		$name:ident<$data_ty:ty>, $path:expr,
+		|$ws:ident| -> $ret_type:ty $block:block
+	) => (
 		$crate::ws_route!($name<$data_ty>, $path, |$ws,| -> $ret_type $block);
 	);
-	($name:ident<$data_ty:ty>, $path:expr, |$ws:ident| -> $ret_type:ty $block:block, |$ret:ident| $ret_block:block ) => (
-		$crate::ws_route!($name<$data_ty>, $path, |$ws,| -> $ret_type $block, |$ret| $ret_block);
+	(
+		$name:ident<$data_ty:ty>, $path:expr,
+		|$ws:ident| -> $ret_type:ty $block:block,
+		|$ret:ident| $ret_block:block
+	) => (
+		$crate::ws_route!(
+			$name<$data_ty>, $path,
+			|$ws,| -> $ret_type $block,
+			|$ret| $ret_block
+		);
 	);
-	($name:ident<$data_ty:ty>, $path:expr, |$ws:ident, $( $data:ident ),*| -> $ret_type:ty $block:block ) => (
-		$crate::ws_route!($name<$data_ty>, $path, |$ws, $($data),*| -> $ret_type $block, |ret| { ret });
+	(
+		$name:ident<$data_ty:ty>, $path:expr,
+		|$ws:ident, $( $data:ident ),*| -> $ret_type:ty $block:block
+	) => (
+		$crate::ws_route!(
+			$name<$data_ty>, $path,
+			|$ws, $($data),*| -> $ret_type $block, |ret| { ret }
+		);
 	);
-	($name:ident<$data_ty:ty>, $path:expr, |$ws:ident, $( $data:ident ),*| -> $ret_type:ty $block:block, |$ret:ident| $ret_block:block ) => (
+	(
+		$name:ident<$data_ty:ty>, $path:expr,
+		|$ws:ident, $( $data:ident ),*| -> $ret_type:ty $block:block,
+		|$ret:ident| $ret_block:block
+	) => (
 
 		pub struct $name;
 
@@ -71,7 +95,9 @@ macro_rules! ws_route {
 				&'a self,
 				req: &'a mut $crate::request::RequestBuilder<'_>,
 				raw_data: &'a $data_ty
-			) -> $crate::util::PinnedFuture<'a, Option<$crate::Result<$crate::http::Response>>> {
+			) -> $crate::util::PinnedFuture<'a,
+				Option<$crate::Result<$crate::http::Response>>
+			> {
 
 				use $crate::into::IntoRouteResult;
 
@@ -96,7 +122,9 @@ macro_rules! ws_route {
 						(header_upgrade, header_version, websocket_key),
 						(Some("websocket"), Some("13"), Some(k))
 					) {
-						return Some(Err($crate::error::ClientErrorKind::BadRequest.into()))
+						return Some(Err(
+							$crate::error::ClientErrorKind::BadRequest.into()
+						))
 					}
 
 
@@ -116,8 +144,12 @@ macro_rules! ws_route {
 					tokio::task::spawn(async move {
 						match on_upgrade.await {
 							Ok(upgraded) => {
-								let mut $ws = $crate::ws::WebSocket::new(upgraded).await;
-								let $ret: $ret_type = async move { $block }.await;
+								let mut $ws = $crate::ws::WebSocket::new(
+									upgraded
+								).await;
+								let $ret: $ret_type = async move {
+									$block
+								}.await;
 								let _: () = { $ret_block };
 							},
 							Err(e) => $crate::ws::upgrade_error(e)
@@ -132,7 +164,6 @@ macro_rules! ws_route {
 							.header("upgrade", "websocket")
 							.header("sec-websocket-accept", ws_accept)
 							.build()
-						//.into()
 					))
 				} )
 			}
@@ -143,9 +174,12 @@ macro_rules! ws_route {
 }
 
 
+/// we need to expose this instead of inlining it in the macro since
+/// tracing logs the crate name and we wan't it to be associated with
+/// fire http instead of the crate that uses the macro
 #[doc(hidden)]
 pub fn upgrade_error(e: hyper::Error) {
-	error!("upgrade error {:?}", e);
+	error!("websocket upgrade error {:?}", e);
 }
 
 // does the key need to be a specific length?
@@ -269,7 +303,8 @@ impl WebSocket {
 				Ok(Some(ProtMessage::Pong(_))) => continue,
 				Ok(Some(ProtMessage::Close(_))) => Ok(None),
 				Ok(Some(ProtMessage::Frame(f))) => {
-					eprintln!("received frame {:?} ?? what todo?", f);
+					warn!("we received a websocket frame {:?}", f);
+					// Todod should we do something about this frame??
 					continue
 				},
 				Err(Error::ConnectionClosed) |
