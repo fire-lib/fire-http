@@ -1,11 +1,9 @@
-
+use crate::Response;
 use crate::into::IntoResponse;
+use crate::header::{RequestHeader, ResponseHeader, StatusCode};
 
 use std::fmt;
 use std::time::Duration;
-
-use http::header::{RequestHeader, ResponseHeader, StatusCode};
-use http::Response;
 
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
@@ -19,7 +17,6 @@ const DEFAULT_MAX_AGE: Duration = Duration::from_secs(60 * 60 * 24);
 pub struct Etag(String);
 
 impl Etag {
-
 	pub fn new() -> Self {
 		let rand_str: String = thread_rng()
 			.sample_iter(&Alphanumeric)
@@ -33,7 +30,6 @@ impl Etag {
 	pub fn as_str(&self) -> &str {
 		self.0.as_str()
 	}
-
 }
 
 impl fmt::Display for Etag {
@@ -60,12 +56,11 @@ impl PartialEq<&str> for Etag {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Caching {
 	max_age: Duration,
-	etag: Etag,
+	etag: Etag
 	// only_if_status_ok: bool
 }
 
 impl Caching {
-
 	pub fn new(max_age: Duration) -> Self {
 		Self {
 			max_age,
@@ -73,14 +68,6 @@ impl Caching {
 			// only_if_status_ok: false
 		}
 	}
-
-	// pub fn new_if_status_ok(max_age: Duration) -> Self {
-	// 	Self {
-	// 		max_age,
-	// 		etag: Etag::new(),
-	// 		only_if_status_ok: true
-	// 	}
-	// }
 
 	// defaults to 1 day
 	pub fn default() -> Self {
@@ -108,26 +95,20 @@ impl Caching {
 		// }
 
 		header.values.insert("Cache-Control", self.cache_control_string());
-		header.values.insert("ETag", String::from(self.etag));
-	}
 
+		// etag makes only sense with files not 404
+		if header.status_code == StatusCode::OK {
+			header.values.insert("ETag", String::from(self.etag));
+		}
+	}
 }
 
 impl IntoResponse for Caching {
 	fn into_response(self) -> Response {
 		Response::builder()
-			.status_code(StatusCode::NotModified)
-			.header("Cache-Control", self.cache_control_string())
-			.header("ETag", String::from(self.etag))
+			.status_code(StatusCode::NOT_MODIFIED)
+			.header("cache-control", self.cache_control_string())
+			.header("etag", String::from(self.etag))
 			.build()
 	}
 }
-
-/*
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EtagMatchRequest {
-	IfNoneMatch(Etag),
-	IfMatch(Etag), // if present with a range
-	None
-}
-*/

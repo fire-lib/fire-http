@@ -1,30 +1,26 @@
+use super::{with_file, with_partial_file};
+use super::{IntoPathBuf, Caching, Range};
 
-use super::{ with_file, with_partial_file };
-use super::{ IntoPathBuf, Caching, Range };
-
-use crate::{ Error, Data };
-use crate::routes::{ Route, check_static };
+use crate::{Request, Response, Error, Data};
+use crate::header::{RequestHeader, Method, StatusCode};
+use crate::routes::{Route, check_static};
 use crate::into::IntoResponse;
 use crate::error::ClientErrorKind;
 use crate::util::PinnedFuture;
-use crate::request::Request;
 
-use std::path::{ Path, PathBuf };
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::io;
 
-use http::header::{ RequestHeader, Method };
-use http::Response;
 
-
-/// returns io::Error not found if path is directory
+/// returns io::Error not found if the path is a directory
 pub async fn serve_file(
 	path: impl AsRef<Path>,
 	req: &Request,
 	caching: Option<Caching>
 ) -> io::Result<Response> {
 
-	// check caching
+	// check caching and if the etag matches return NOT_MODIFIED
 	if matches!(&caching, Some(c) if c.if_none_match(req.header())) {
 		return Ok(caching.unwrap().into_response())
 	}
@@ -44,13 +40,15 @@ pub async fn serve_file(
 
 	// set etag
 	if let Some(caching) = caching {
-		caching.complete_header(&mut res.header);
+		if matches!(res.header.status_code,
+			StatusCode::OK | StatusCode::NOT_FOUND)
+		{
+			caching.complete_header(&mut res.header);
+		}
 	}
 
 	Ok(res)
 }
-
-
 
 
 pub struct StaticFilesRoute {
@@ -60,7 +58,6 @@ pub struct StaticFilesRoute {
 }
 
 impl StaticFilesRoute {
-
 	pub fn new(uri: &'static str, raw_path: &'static str) -> Self {
 		Self::prv_new(uri, raw_path, None)
 	}
@@ -93,22 +90,21 @@ impl StaticFilesRoute {
 	) -> Self {
 		Self::prv_new(uri, raw_path, Some(Caching::new(max_age)))
 	}
-
 }
 
-impl<D: Data> Route<D> for StaticFilesRoute {
-
+impl Route for StaticFilesRoute {
 	fn check(&self, header: &RequestHeader) -> bool {
-		header.method() == &Method::Get &&
+		header.method() == &Method::GET &&
 		header.uri().path().starts_with(self.uri)
 	}
+
+	fn validate_data(&self, _data: &Data) {}
 
 	fn call<'a>(
 		&'a self,
 		req: &'a mut Request,
-		_: &'a D
+		_: &'a Data
 	) -> PinnedFuture<'a, crate::Result<Response>> {
-
 		let mut full_path_buf = self.path.clone();
 		let uri = self.uri;
 		let caching = self.caching.clone();
@@ -122,10 +118,12 @@ impl<D: Data> Route<D> for StaticFilesRoute {
 			// validate path buf
 			// if path is a directory serve_file will return NotFound
 			let path_buf = res_path_buf
-				.map_err(|e| Error::new(ClientErrorKind::NotFound, e))?;
+				.map_err(|e| Error::new(ClientErrorKind::BadRequest, e))?;
 
 			// build full pathbuf
 			full_path_buf.push(path_buf);
+
+			tracing::info!("trying to serve {:?}", full_path_buf);
 
 			serve_file(full_path_buf, &req, caching).await
 				.map_err(Error::from_client_io)
@@ -143,13 +141,11 @@ impl<D: Data> Route<D> for StaticFilesRoute {
 /// use std::time::Duration;
 /// use fire::static_files;
 /// 
-/// type Data = ();
-/// 
 /// static_files! { Files, "/files" => "./www/" }
 /// 
 /// #[tokio::main]
 /// async fn main() {
-/// 	let mut server = fire::build("127.0.0.1:0", ()).unwrap();
+/// 	let mut server = fire::build("127.0.0.1:0").await.unwrap();
 /// 	// adds the handler without any caching
 /// 	server.add_route(Files::new());
 /// 	// adds caching in release builds
@@ -216,7 +212,6 @@ pub struct StaticFileRoute {
 }
 
 impl StaticFileRoute {
-
 	pub fn new(uri: &'static str, path: &'static str) -> Self {
 		Self { uri, path, caching: None }
 	}
@@ -235,19 +230,19 @@ impl StaticFileRoute {
 
 }
 
-impl<D: Data> Route<D> for StaticFileRoute {
-
+impl Route for StaticFileRoute {
 	fn check(&self, header: &RequestHeader) -> bool {
-		header.method() == &Method::Get
+		header.method() == &Method::GET
 		&& check_static(header.uri().path(), self.uri)
 	}
+
+	fn validate_data(&self, _data: &Data) {}
 
 	fn call<'a>(
 		&'a self,
 		req: &'a mut Request,
-		_: &D
+		_: &'a Data
 	) -> PinnedFuture<'a, crate::Result<Response>> {
-
 		let path = self.path;
 		let caching = self.caching.clone();
 
@@ -263,7 +258,6 @@ impl<D: Data> Route<D> for StaticFileRoute {
 #[macro_export]
 macro_rules! static_file {
 	($name:ident, $uri:expr => $path:expr) => (
-
 		pub struct $name;
 
 		impl $name {
@@ -316,12 +310,11 @@ macro_rules! static_file {
 /// ```
 /// # use fire_http as fire;
 /// use fire::dyn_static_files;
-/// 
-/// type Data = ();
+/// use std::path::PathBuf;
 /// 
 /// dyn_static_files! {
 /// 	DynamicFiles, "/files/",
-/// 	|req| { // needs to return fire::Result<PathBuf>
+/// 	|req| -> fire::Result<PathBuf> {
 /// 		unimplemented!()
 /// 	}
 /// }
@@ -329,28 +322,40 @@ macro_rules! static_file {
 /// ```
 #[macro_export]
 macro_rules! dyn_static_files {
-	($name:ident, $uri:expr, |$req:ident| $block:block) => (
-		$crate::dyn_static_files!($name, $uri, self, |$req,| $block);
+	(
+		$name:ident, $uri:expr,
+		|$req:ident| -> $ret_ty:ty $block:block
+	) => (
+		$crate::dyn_static_files!($name, $uri, me, |$req,| -> $ret_ty $block);
 	);
-	($name:ident, $uri:expr, $self:ident, |$req:ident| $block:block) => (
-		$crate::dyn_static_files!($name, $uri, $self, |$req,| $block);
+	(
+		$name:ident, $uri:expr, $self:ident,
+		|$req:ident| -> $ret_ty:ty $block:block
+	) => (
+		$crate::dyn_static_files!(
+			$name, $uri, $self,
+			|$req,| -> $ret_ty $block
+		);
 	);
-	($name:ident, $uri:expr, |$req:ident, $($data:ident),*| $block:block) => (
-		$crate::dyn_static_files!($name, $uri, self, |$req, $($data),*| $block);
+	(
+		$name:ident, $uri:expr,
+		|$req:ident, $($data:ident: $data_ty:ty),*| -> $ret_ty:ty $block:block
+	) => (
+		$crate::dyn_static_files!{ $name, $uri, me,
+			|$req, $($data: $data_ty),*| -> $ret_ty $block
+		}
 	);
 	(
 		$name:ident,
 		$uri:expr,
 		$self:ident,
-		|$req:ident, $($data:ident),*| $block:block
+		|$req:ident, $($data:ident: $data_ty:ty),*| -> $ret_ty:ty $block:block
 	) => (
-
 		pub struct $name {
 			caching: Option<$crate::fs::Caching>
 		}
 
 		impl $name {
-
 			pub fn new() -> Self {
 				Self { caching: None }
 			}
@@ -381,42 +386,58 @@ macro_rules! dyn_static_files {
 
 			pub fn req_uri<'a>(
 				&self,
-				req: &'a $crate::request::Request
+				req: &'a $crate::Request
 			) -> &'a str {
 				&req.header().uri().path()[$uri.len()..]
 			}
 
 		}
 
-		impl $crate::routes::Route<Data> for $name {
+		impl $crate::routes::Route for $name {
 
 			fn check(
 				&self,
-				header: &$crate::http::header::RequestHeader
+				header: &$crate::header::RequestHeader
 			) -> bool {
-				header.method() == &$crate::http::header::Method::Get
+				header.method() == &$crate::header::Method::GET
 				&& header.uri().path().starts_with($uri)
 			}
 
-			fn call<'a>(
-				&'a $self,
-				$req: &'a mut $crate::request::Request,
-				raw_data: &'a Data
-			) -> $crate::util::PinnedFuture<'a, $crate::Result<$crate::http::Response>> {
+			fn validate_data(&self, data: &$crate::Data) {
+				$(
+					assert!(data.exists::<$data_ty>());
+				)*
+			}
 
-				let caching = $self.caching.clone();
+			fn call<'a>(
+				&'a self,
+				req: &'a mut $crate::Request,
+				raw_data: &'a $crate::Data
+			) -> $crate::util::PinnedFuture<'a, $crate::Result<$crate::Response>> {
+
+				let caching = self.caching.clone();
+
+				type ExpectedTy = $crate::Result<std::path::PathBuf>;
+
+				async fn route(
+					$self: &$name,
+					$req: &mut $crate::Request,
+					$( $data: &$data_ty ),*
+				) -> $ret_ty {
+					$block
+				}
 
 				$crate::util::PinnedFuture::new(async move {
 
-					$(let $data = raw_data.$data();)*
+					let path_buf = route(
+						self,
+						req,
+						$(
+							raw_data.get::<$data_ty>().unwrap()
+						),*
+					).await?;
 
-					let path_buf: $crate::Result<std::path::PathBuf> = async {
-						$block
-					}.await;
-
-					let path_buf = path_buf?;
-
-					$crate::fs::serve_file(path_buf, &$req, caching).await
+					$crate::fs::serve_file(path_buf, &req, caching).await
 						.map_err($crate::Error::from_client_io)
 				})
 			}

@@ -1,17 +1,15 @@
-
-use crate::http::Response;
+use crate::{Response, Body};
 use crate::into::IntoResponse;
 
 use tokio::{io, fs};
 
-use http::body::BodyWithTimeout;
-
-use std::path::{ Path, PathBuf };
+use std::fmt;
+use std::path::{Path, PathBuf};
 use std::convert::AsRef;
 use std::str::Utf8Error;
-use std::fmt;
 
 use percent_encoding::percent_decode_str;
+
 
 mod file;
 pub use file::File;
@@ -25,14 +23,14 @@ pub use caching::Caching;
 pub mod static_files;
 pub use static_files::{StaticFilesRoute, StaticFileRoute, serve_file};
 
-/// returns io::Error not found if path is directory
+/// returns io::Error not found if the path is a directory
 pub async fn with_file<P>(path: P) -> io::Result<Response>
 where P: AsRef<Path> {
 	File::open(path).await
 		.map(|f| f.into_response())
 }
 
-/// returns io::Error not found if path is directory
+/// returns io::Error not found if the path is a directory
 pub async fn with_partial_file<P>(path: P, range: Range) -> io::Result<Response>
 where P: AsRef<Path> {
 	PartialFile::open(path, range).await
@@ -52,18 +50,13 @@ where P: AsRef<Path> {
 /// ```
 #[macro_export]
 macro_rules! get_with_file {
-	($name:ident, $($tt:tt)*) => (
-		$crate::get_with_file!($name<Data>, $($tt)*);
-	);
-	($name:ident<$data_ty:ty>, $uri:expr => $path:expr) => (
-		$crate::get!(
-			$name<$data_ty>,
-			$uri,
-			|_r| -> $crate::Result<$crate::http::Response> {
+	($name:ident, $uri:expr => $path:expr) => (
+		$crate::get!{ $name, $uri,
+			|_r| -> $crate::Result<$crate::Response> {
 				$crate::fs::with_file($path).await
 					.map_err($crate::Error::from_client_io)
 			}
-		);
+		}
 	)
 }
 
@@ -101,7 +94,6 @@ pub trait IntoPathBuf {
 
 impl IntoPathBuf for &str {
 	fn into_path_buf(self) -> Result<PathBuf, IntoPathBufError> {
-
 		let mut path_buf = PathBuf::new();
 
 		for (i, part) in self.split('/').enumerate() {
@@ -134,10 +126,15 @@ impl IntoPathBuf for &str {
 // TODO maybe return crate::Result
 // because file::create should be a server Error
 pub async fn write_body_to_file<P>(
-	body: BodyWithTimeout,
+	body: Body,
 	path: P
 ) -> io::Result<()>
 where P: AsRef<Path> {
 	let mut file = fs::File::create(path).await?;
-	body.copy_to_async_write(&mut file).await
+	let reader = body.into_async_reader();
+	tokio::pin!(reader);
+
+	// body.copy_to_async_write(&mut file).await
+	io::copy(&mut reader, &mut file).await
+		.map(|_| ())
 }

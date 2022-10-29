@@ -1,10 +1,8 @@
 
 use fire_http as fire;
 
-use fire::http::{Response, Body};
-use fire::http::header::{StatusCode, Mime};
-
-type Data = ();
+use fire::{Response, Body};
+use fire::header::{StatusCode, Mime};
 
 #[macro_use]
 mod util;
@@ -12,7 +10,6 @@ mod util;
 
 #[tokio::test]
 async fn hello_world() {
-
 	const BODY: &str = "Hello, World!";
 
 	// build route
@@ -35,13 +32,11 @@ async fn hello_world() {
 
 #[tokio::test]
 async fn test_post() {
-
 	const BODY: &str = "Hello, World!";
 
 	// build route
 	fire::post!(Post, "/", |req| -> Body {
-		// we loose the timeout here
-		req.take_body().into_body()
+		req.take_body()
 	});
 
 	let addr = spawn_server!(|builder| {
@@ -63,18 +58,17 @@ async fn test_post() {
 
 #[tokio::test]
 async fn test_catcher() {
-
 	const BODY: &str = "Body not Found";
 
 	// build route
 	fire::catcher!(NotFound,
 		|_r, header| {
-			header.status_code() == &StatusCode::NotFound
+			header.status_code() == &StatusCode::NOT_FOUND
 		},
 		|_r, res| -> Response {
 			Response::builder()
 				.status_code(*res.header().status_code())
-				.content_type(Mime::Text)
+				.content_type(Mime::TEXT)
 				.body(BODY)
 				.build()
 		}
@@ -97,13 +91,7 @@ async fn test_catcher() {
 
 #[tokio::test]
 async fn anything() {
-
 	struct Data(Vec<u8>);
-	impl Data {
-		fn data(&self) -> &[u8] {
-			&self.0
-		}
-	}
 
 	// some random data
 	let mut data = vec![];
@@ -112,15 +100,15 @@ async fn anything() {
 	}
 
 	// build route
-	fire::get!(Get, "/", |_r, data| -> Vec<u8> {
-		data.to_vec()
+	fire::get!(Get, "/", |_r, data: Data| -> Vec<u8> {
+		data.0.clone()
 	});
 
 	let addr = spawn_server!(
 		|builder| {
+			builder.add_data(Data(data.clone()));
 			builder.add_route(Get);
-		},
-		Data(data.clone())
+		}
 	);
 
 	// now do a request

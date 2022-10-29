@@ -1,13 +1,11 @@
-
+use crate::{Response, Body};
+use crate::header::Mime;
 use crate::into::IntoResponse;
 
 use std::path::Path;
 use std::convert::AsRef;
 
 use tokio::{io, fs};
-
-use http::header::Mime;
-use http::{Response, Body};
 
 
 pub struct File {
@@ -17,27 +15,24 @@ pub struct File {
 }
 
 impl File {
-
 	pub fn new<M>(file: fs::File, mime_type: M, size: usize) -> Self
 	where M: Into<Mime> {
 		Self { file, mime_type: mime_type.into(), size }
 	}
 
-	/// if the path is directory
+	/// if the path is a directory
 	/// returns io::Error NotFound
 	pub async fn open<P>(path: P) -> io::Result<Self>
 	where P: AsRef<Path> {
-
 		let extension = path.as_ref()
 			.extension()
-			.and_then( |f| f.to_str() );
+			.and_then(|f| f.to_str());
 
-		let mime_type = match extension {
-			Some(e) => Mime::from_ext(e),
-			None => Mime::Binary
-		};
+		let mime_type = extension
+			.and_then(Mime::from_extension)
+			.unwrap_or(Mime::BINARY);
 
-		let file = fs::File::open( path ).await?;
+		let file = fs::File::open(path).await?;
 		let metadata = file.metadata().await?;
 
 		// make sure we open a file
@@ -50,9 +45,7 @@ impl File {
 
 		let size = metadata.len() as usize;
 
-		Ok( Self {
-			file, mime_type, size
-		} )
+		Ok(Self { file, mime_type, size })
 	}
 
 }
@@ -62,7 +55,7 @@ impl IntoResponse for File {
 		Response::builder()
 			.content_type(self.mime_type)
 			.header("content-length", self.size)
-			.body(Body::from_async_read(self.file))
+			.body(Body::from_async_reader(self.file))
 			.build()
 	}
 }

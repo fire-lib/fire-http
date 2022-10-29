@@ -1,6 +1,8 @@
-
-use crate::request::{HyperRequest, RequestBuilder};
-use crate::util::convert_fire_res_to_hyper_res;
+use crate::Data;
+use crate::server::HyperRequest;
+use crate::util::{
+	convert_hyper_req_to_fire_req, convert_fire_resp_to_hyper_resp
+};
 use crate::routes::Routes;
 
 use std::sync::Arc;
@@ -10,9 +12,9 @@ use std::time::Duration;
 
 use tracing::error;
 
-use http::header::StatusCode;
-use http::response::Response;
-use http::body::FireHttpBody;
+use types::header::StatusCode;
+use types::response::Response;
+use types::body::BodyHttp;
 
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 // same as page size
@@ -22,11 +24,11 @@ const DEFAULT_REQUEST_SIZE_LIMIT: usize = 4096;// 4kb
 #[derive(Debug)]
 pub struct RequestConfigs {
 	pub timeout: Duration,
-	pub size_limit: usize// in bytes
+	// in bytes
+	pub size_limit: usize
 }
 
 impl RequestConfigs {
-
 	pub fn new() -> Self {
 		Self {
 			timeout: DEFAULT_REQUEST_TIMEOUT,
@@ -38,104 +40,94 @@ impl RequestConfigs {
 		self.timeout = timeout;
 	}
 
-	/// panics if is 0
+	/// ## Panics
+	/// if is 0
 	pub fn size_limit(&mut self, size_limit: usize) {
 		assert!(size_limit > 0, "size limit needs to be bigger than zero");
 		self.size_limit = size_limit;
 	}
-
 }
 
-
-// type that gets passet to the requests
-
-pub type MoreWood<D> = Arc<Wood<D>>;
-
 // IncredientsForAFire
-pub struct Wood<D> {
-	data: D,
-	routes: Routes<D>,
+pub struct Wood {
+	data: Data,
+	routes: Routes,
 	configs: RequestConfigs
 }
 
-impl<D> Wood<D> {
-
-	pub fn new(data: D, routes: Routes<D>, configs: RequestConfigs) -> Self {
+impl Wood {
+	pub fn new(data: Data, routes: Routes, configs: RequestConfigs) -> Self {
 		Self { data, routes, configs }
 	}
 
-	pub fn routes(&self) -> &Routes<D> {
+	pub fn routes(&self) -> &Routes {
 		&self.routes
 	}
 
-	pub fn data(&self) -> &D {
+	pub fn data(&self) -> &Data {
 		&self.data
 	}
 
 	pub fn configs(&self) -> &RequestConfigs {
 		&self.configs
 	}
-
 }
 
-pub async fn new_spark<D>(
-	wood: MoreWood<D>,
+pub async fn new_spark(
+	wood: Arc<Wood>,
 	hyper_req: HyperRequest,
 	address: SocketAddr
-) -> Result<hyper::Response<FireHttpBody>, Infallible> {
-	let route_res = route(wood, hyper_req, address).await;
-	let hyper_res = convert_fire_res_to_hyper_res( route_res );
-	Ok(hyper_res)
+) -> Result<hyper::Response<BodyHttp>, Infallible> {
+	let route_resp = route(wood, hyper_req, address).await;
+	let hyper_resp = convert_fire_resp_to_hyper_resp(route_resp);
+	Ok(hyper_resp)
 }
 
-pub async fn route<D>(
-	wood: MoreWood<D>,
-	hyper_req: HyperRequest,
+pub async fn route(
+	wood: Arc<Wood>,
+	mut hyper_req: HyperRequest,
 	address: SocketAddr
 ) -> Response {
 	// todo use a tracing span
 
 	trace!("Request {} {}", hyper_req.method(), hyper_req.uri());
 
-	let mut builder = RequestBuilder::new(hyper_req, address, wood.configs());
-
 	// route raw_routes
 	// response is Option<Response>
-	let hyper_req = builder.hyper_ref().unwrap();
-	let response = match wood.routes().route_raw(hyper_req) {
-		Some(route) => {
-			let res = route.call(&mut builder, wood.data()).await;
-			match res {
-				Some(Ok(res)) => Some(res),
-				Some(Err(e)) => {
-					error!("RawRoute returned an error {:?}", e);
-					Some(e.status_code().into())
-				},
-				None => None
-			}
-		},
-		None => None
+	let resp = if let Some(route) = wood.routes().route_raw(&hyper_req) {
+		let res = route.call(&mut hyper_req, wood.data()).await;
+		match res {
+			Some(Ok(res)) => Some(res),
+			Some(Err(e)) => {
+				error!("RawRoute returned an error {:?}", e);
+				Some(e.status_code().into())
+			},
+			None => None
+		}
+	} else {
+		None
 	};
 
-	let mut req = match builder.into_fire() {
+	let req = convert_hyper_req_to_fire_req(hyper_req, address, wood.configs());
+	let mut req = match req {
 		Ok(r) => r,
 		Err(e) => {
-			error!("Hyper Request Parsing error {:?}", e);
-			return StatusCode::BadRequest.into()
+			if let Some(resp) = resp {
+				return resp
+			}
+			error!("Could not parse the hyper request {:?}", e);
+			return StatusCode::BAD_REQUEST.into()
 		}
 	};
 
-	// Shadow Request
-
-	let response = if let Some(res) = response {
-		res
+	// normal route
+	let resp = if let Some(r) = resp {
+		r
 	} else {
-
 		// first response
-		let header = req.header();
-		match wood.routes().route(header) {
+		match wood.routes().route(req.header()) {
 			Some(route) => {
-				let result = route.call( &mut req, wood.data() ).await;
+				let result = route.call(&mut req, wood.data()).await;
 				// is Ok(Response)
 				match result {
 					Ok(res) => res,
@@ -149,23 +141,21 @@ pub async fn route<D>(
 					}
 				}
 			},
-			None => StatusCode::NotFound.into()
+			None => StatusCode::NOT_FOUND.into()
 		}
-
 	};
 
 	// APPLY OVERRIDES
 
 	// check with catcher
-	#[allow(unused_assignments)]
 	let req_header = req.header();
-	let res_header = response.header();
+	let res_header = resp.header();
 	let resp = match wood.routes().route_catcher(req_header, res_header) {
 		Some(route) => {
-			route.call(req, response, wood.data()).await
+			route.call(req, resp, wood.data()).await
 				.unwrap_or_else(|e| e.status_code().into())
 		},
-		None => response
+		None => resp
 	};
 
 	trace!("Response {:?}", resp);

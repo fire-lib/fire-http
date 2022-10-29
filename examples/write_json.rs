@@ -1,10 +1,7 @@
-
 use fire_http as fire;
 use fire::json_get;
-use serde::{ Serialize, Deserialize };
 
-// Default Data
-pub struct Data;
+use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct MyType {
@@ -12,21 +9,21 @@ pub struct MyType {
 	good: &'static str
 }
 
-json_get!{ HelloWorld, "/", |_r| -> MyType {
-	MyType {
-		crazy: "crazy",
-		good: "good"
+json_get!{ HelloWorld, "/",
+	|_r| -> MyType {
+		MyType {
+			crazy: "crazy",
+			good: "good"
+		}
 	}
-} }
+}
 
 #[tokio::main]
 async fn main() {
-
-	let mut server = fire::build( "0.0.0.0:3000", Data )
+	let mut server = fire::build("0.0.0.0:3000").await
 		.expect("Address could not be parsed");
 
-	server.add_route( HelloWorld );
+	server.add_route(HelloWorld);
 
 	server.light().await.unwrap();
-	
 }

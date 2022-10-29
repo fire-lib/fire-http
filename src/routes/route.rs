@@ -1,9 +1,6 @@
-
 use crate::util::PinnedFuture;
-use crate::request::Request;
-
-use http::response::Response;
-use http::header::RequestHeader;
+use crate::{Request, Response, Data};
+use crate::header::RequestHeader;
 
 /// A `Route` is sort of a request handler, routes are checked in order they
 /// where added. If a route returns `true` from the `check` method, `call` is
@@ -11,12 +8,16 @@ use http::header::RequestHeader;
 /// 
 /// If possible you should use the provided macros which implement Route for
 /// you.
-pub trait Route<D>: Send + Sync {
+pub trait Route: Send + Sync {
 	fn check(&self, req: &RequestHeader) -> bool;
+
+	// check if every data you expect is in Data
+	fn validate_data(&self, data: &Data);
+
 	fn call<'a>(
 		&'a self,
 		req: &'a mut Request,
-		data: &'a D
+		data: &'a Data
 	) -> PinnedFuture<'a, crate::Result<Response>>;
 }
 
@@ -59,8 +60,6 @@ pub fn check_static(uri_path: &str, s: &'static str) -> bool {
 /// use fire::route;
 /// use fire::routes::check_static;
 /// 
-/// type Data = ();
-/// 
 /// route! {
 /// 	RouteName,
 /// 	|req_header| {
@@ -73,53 +72,64 @@ pub fn check_static(uri_path: &str, s: &'static str) -> bool {
 /// ```
 #[macro_export]
 macro_rules! route {
-	($name:ident, $($tt:tt)* ) => (
-		$crate::route!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		|$check_req:ident| $check_block:block,
-		|$req:ident| -> $ret_type:ty $block:block
+		|$req:ident| -> $ret_ty:ty $block:block
 	) => (
 		$crate::route!(
-			$name<$data_ty>,
+			$name,
 			|$check_req| $check_block,
-			|$req,| -> $ret_type $block
+			|$req,| -> $ret_ty $block
 		);
 	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		|$check_req:ident| $check_block:block,
-		|$req:ident, $( $data:ident ),*| -> $ret_type:ty
+		|$req:ident, $( $data:ident: $data_ty:ty ),*| -> $ret_ty:ty
 		$block:block
 	) => (
 
 		pub struct $name;
 
-		impl $crate::routes::Route<$data_ty> for $name {
+		impl $crate::routes::Route for $name {
 
 			fn check(
 				&self,
-				$check_req: &$crate::http::header::RequestHeader
+				$check_req: &$crate::header::RequestHeader
 			) -> bool {
 				$check_block
 			}
 
+			fn validate_data(&self, data: &$crate::Data) {
+				$(
+					assert!(data.exists::<$data_ty>());
+				)*
+			}
+
 			fn call<'a>(
 				&'a self,
-				$req: &'a mut $crate::request::Request,
-				raw_data: &'a $data_ty
-			) -> $crate::util::PinnedFuture<'a, $crate::Result<$crate::http::Response>> {
+				req: &'a mut $crate::Request,
+				raw_data: &'a $crate::Data
+			) -> $crate::util::PinnedFuture<'a, $crate::Result<$crate::Response>> {
 
 				use $crate::into::IntoRouteResult;
 
-				$crate::util::PinnedFuture::new( async move {
+				async fn route(
+					$req: &mut $crate::Request,
+					$( $data: &$data_ty ),*
+				) -> $ret_ty {
+					$block
+				}
 
-					$( let $data = raw_data.$data(); )*
-
-					let data: $ret_type = async { $block }.await;
-					data.into_route_result()
-				} )
+				$crate::util::PinnedFuture::new(async move {
+					route(
+						req,
+						$(
+							raw_data.get::<$data_ty>().unwrap()
+						),*
+					).await.into_route_result()
+				})
 			}
 
 		}
@@ -137,10 +147,8 @@ macro_rules! route {
 /// # use fire_http as fire;
 /// use fire::static_route;
 /// 
-/// type Data = ();
-/// 
 /// static_route! {
-/// 	RouteName, "/", Get,
+/// 	RouteName, "/", GET,
 /// 	|_req| -> &'static str {
 /// 		"Hello, World!"
 /// 	}
@@ -148,22 +156,29 @@ macro_rules! route {
 /// ```
 #[macro_export]
 macro_rules! static_route {
-	($name:ident, $($tt:tt)*) => (
-		$crate::static_route!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
 		$method:ident,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		|$req:ident| $($tt:tt)*
+	) => (
+		$crate::static_route!(
+			$name, $path, $method, |$req,| $($tt)*
+		);
+	);
+	(
+		$name:ident,
+		$path:expr,
+		$method:ident,
+		|$req:ident, $($data:ident: $data_ty:ty),*| -> $ret_type:ty $block:block
 	) => (
 		$crate::route!(
-			$name<$data_ty>,
+			$name,
 			|req| {
-				req.method() == &$crate::http::header::Method::$method &&
+				req.method() == &$crate::header::Method::$method &&
 				$crate::routes::check_static(req.uri().path(), $path)
 			},
-			|$($data),*| -> $ret_type $block
+			|$req, $($data: $data_ty),*| -> $ret_type $block
 		);
 	)
 }
@@ -175,8 +190,6 @@ macro_rules! static_route {
 /// # use fire_http as fire;
 /// use fire::get;
 /// 
-/// type Data = ();
-/// 
 /// get! {
 /// 	RouteName, "/",
 /// 	|_req| -> &'static str {
@@ -186,19 +199,16 @@ macro_rules! static_route {
 /// ```
 #[macro_export]
 macro_rules! get {
-	($name:ident, $($tt:tt)*) => (
-		$crate::get!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::static_route!(
-			$name<$data_ty>,
+			$name,
 			$path,
-			Get,
-			|$($data),*| -> $ret_type $block
+			GET,
+			| $($tt)*
 		);
 	)
 }
@@ -210,8 +220,6 @@ macro_rules! get {
 /// # use fire_http as fire;
 /// use fire::post;
 /// 
-/// type Data = ();
-/// 
 /// post! {
 /// 	RouteName, "/",
 /// 	|_req| -> &'static str {
@@ -221,19 +229,16 @@ macro_rules! get {
 /// ```
 #[macro_export]
 macro_rules! post {
-	($name:ident, $($tt:tt)*) => (
-		$crate::post!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::static_route!(
-			$name<$data_ty>,
+			$name,
 			$path,
-			Post,
-			|$($data),*| -> $ret_type $block
+			POST,
+			| $($tt)*
 		);
 	)
 }
@@ -245,8 +250,6 @@ macro_rules! post {
 /// # use fire_http as fire;
 /// use fire::put;
 /// 
-/// type Data = ();
-/// 
 /// put! {
 /// 	RouteName, "/",
 /// 	|_req| -> &'static str {
@@ -256,19 +259,16 @@ macro_rules! post {
 /// ```
 #[macro_export]
 macro_rules! put {
-	($name:ident, $($tt:tt)*) => (
-		$crate::put!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::static_route!(
-			$name<$data_ty>,
+			$name,
 			$path,
-			Put,
-			|$($data),*| -> $ret_type $block
+			PUT,
+			| $($tt)*
 		);
 	)
 }
@@ -280,8 +280,6 @@ macro_rules! put {
 /// # use fire_http as fire;
 /// use fire::delete;
 /// 
-/// type Data = ();
-/// 
 /// delete! {
 /// 	RouteName, "/",
 /// 	|_req| -> &'static str {
@@ -291,19 +289,16 @@ macro_rules! put {
 /// ```
 #[macro_export]
 macro_rules! delete {
-	($name:ident, $($tt:tt)*) => (
-		$crate::delete!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::static_route!(
-			$name<$data_ty>,
+			$name,
 			$path,
-			Delete,
-			|$($data),*| -> $ret_type $block
+			DELETE,
+			| $($tt)*
 		);
 	)
 }
@@ -315,8 +310,6 @@ macro_rules! delete {
 /// # use fire_http as fire;
 /// use fire::head;
 /// 
-/// type Data = ();
-/// 
 /// head! {
 /// 	RouteName, "/",
 /// 	|_req| -> &'static str {
@@ -326,19 +319,16 @@ macro_rules! delete {
 /// ```
 #[macro_export]
 macro_rules! head {
-	($name:ident, $($tt:tt)*) => (
-		$crate::head!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::static_route!(
-			$name<$data_ty>,
+			$name,
 			$path,
-			Head,
-			|$($data),*| -> $ret_type $block
+			HEAD,
+			| $($tt)*
 		);
 	)
 }
@@ -355,10 +345,8 @@ macro_rules! head {
 /// # use fire_http as fire;
 /// use fire::dyn_route;
 /// 
-/// type Data = ();
-/// 
 /// dyn_route! {
-/// 	RouteName, "/files/", Get,
+/// 	RouteName, "/files/", GET,
 /// 	|_req| -> &'static str {
 /// 		"Hello, World!"
 /// 	}
@@ -366,23 +354,19 @@ macro_rules! head {
 /// ```
 #[macro_export]
 macro_rules! dyn_route {
-	($name:ident, $($tt:tt)*) => (
-		$crate::dyn_route!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
 		$method:ident,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::route!(
-			$name<$data_ty>,
+			$name,
 			|req| {
-				req.method() == &$crate::http::header::Method::$method &&
+				req.method() == &$crate::header::Method::$method &&
 				req.uri().path().starts_with($path)
 			},
-			|$($data),*| -> $ret_type
-			$block
+			| $($tt)*
 		);
 	)
 }
@@ -394,8 +378,6 @@ macro_rules! dyn_route {
 /// # use fire_http as fire;
 /// use fire::dyn_get;
 /// 
-/// type Data = ();
-/// 
 /// dyn_get! {
 /// 	RouteName, "/files/",
 /// 	|_req| -> &'static str {
@@ -405,19 +387,16 @@ macro_rules! dyn_route {
 /// ```
 #[macro_export]
 macro_rules! dyn_get {
-	($name:ident, $($tt:tt)*) => (
-		$crate::dyn_get!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::dyn_route!(
-			$name<$data_ty>,
+			$name,
 			$path,
-			Get,
-			|$($data),*| -> $ret_type $block
+			GET,
+			| $($tt)*
 		);
 	)
 }
@@ -429,8 +408,6 @@ macro_rules! dyn_get {
 /// # use fire_http as fire;
 /// use fire::dyn_post;
 /// 
-/// type Data = ();
-/// 
 /// dyn_post! {
 /// 	RouteName, "/files/",
 /// 	|_req| -> &'static str {
@@ -440,19 +417,16 @@ macro_rules! dyn_get {
 /// ```
 #[macro_export]
 macro_rules! dyn_post {
-	($name:ident, $($tt:tt)*) => (
-		$crate::dyn_post!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::dyn_route!(
-			$name<$data_ty>,
+			$name,
 			$path,
-			Post,
-			|$($data),*| -> $ret_type $block
+			POST,
+			| $($tt)*
 		);
 	)
 }
@@ -464,8 +438,6 @@ macro_rules! dyn_post {
 /// # use fire_http as fire;
 /// use fire::dyn_put;
 /// 
-/// type Data = ();
-/// 
 /// dyn_put! {
 /// 	RouteName, "/files/",
 /// 	|_req| -> &'static str {
@@ -475,19 +447,16 @@ macro_rules! dyn_post {
 /// ```
 #[macro_export]
 macro_rules! dyn_put {
-	($name:ident, $($tt:tt)*) => (
-		$crate::dyn_put!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::dyn_route!(
-			$name<$data_ty>,
+			$name,
 			$path,
-			Put,
-			|$($data),*| -> $ret_type $block
+			PUT,
+			| $($tt)*
 		);
 	)
 }
@@ -499,8 +468,6 @@ macro_rules! dyn_put {
 /// # use fire_http as fire;
 /// use fire::dyn_delete;
 /// 
-/// type Data = ();
-/// 
 /// dyn_delete! {
 /// 	RouteName, "/files/",
 /// 	|_req| -> &'static str {
@@ -510,19 +477,16 @@ macro_rules! dyn_put {
 /// ```
 #[macro_export]
 macro_rules! dyn_delete {
-	($name:ident, $($tt:tt)*) => (
-		$crate::dyn_delete!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::dyn_route!(
-			$name<$data_ty>,
+			$name,
 			$path,
-			Delete,
-			|$($data),*| -> $ret_type $block
+			DELETE,
+			| $($tt)*
 		);
 	)
 }
@@ -534,8 +498,6 @@ macro_rules! dyn_delete {
 /// # use fire_http as fire;
 /// use fire::dyn_head;
 /// 
-/// type Data = ();
-/// 
 /// dyn_head! {
 /// 	RouteName, "/files/",
 /// 	|_req| -> &'static str {
@@ -545,19 +507,16 @@ macro_rules! dyn_delete {
 /// ```
 #[macro_export]
 macro_rules! dyn_head {
-	($name:ident, $($tt:tt)*) => (
-		$crate::dyn_head!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>,
+		$name:ident,
 		$path:expr,
-		|$($data:ident),*| -> $ret_type:ty $block:block
+		| $($tt:tt)*
 	) => (
 		$crate::dyn_route!(
-			$name<$data_ty>,
+			$name,
 			$path,
-			Head,
-			|$($data),*| -> $ret_type $block
+			HEAD,
+			| $($tt)*
 		);
 	)
 }

@@ -1,6 +1,5 @@
-
 mod raw_route;
-pub use raw_route::RawRoute;
+pub use raw_route::{RawRoute, HyperRequest};
 
 mod route;
 pub use route::{Route, check_static};
@@ -8,24 +7,22 @@ pub use route::{Route, check_static};
 mod catcher;
 pub use catcher::Catcher;
 
-use crate::request::HyperRequest;
-
-use http::header::{ RequestHeader, ResponseHeader };
+use crate::header::{RequestHeader, ResponseHeader};
 
 
-type BoxedRawRoute<D> = Box<dyn RawRoute<D>>;
-type BoxedRoute<D> = Box<dyn Route<D>>;
-type BoxedCatcher<D> = Box<dyn Catcher<D>>;
+type BoxedRawRoute = Box<dyn RawRoute>;
+type BoxedRoute = Box<dyn Route>;
+type BoxedCatcher = Box<dyn Catcher>;
 
 
-pub struct Routes<D> {
+pub struct Routes {
 	// maybe store static routes in hashmap??
-	raw: Vec<BoxedRawRoute<D>>,
-	basic: Vec<BoxedRoute<D>>,
-	catcher: Vec<BoxedCatcher<D>>
+	raw: Vec<BoxedRawRoute>,
+	basic: Vec<BoxedRoute>,
+	catcher: Vec<BoxedCatcher>
 }
 
-impl<D> Routes<D> {
+impl Routes {
 
 	pub fn new() -> Self {
 		Self{
@@ -36,24 +33,24 @@ impl<D> Routes<D> {
 	}
 
 	pub fn push_raw<R>(&mut self, route: R)
-	where R: RawRoute<D> + 'static {
+	where R: RawRoute + 'static {
 		self.raw.push(Box::new(route))
 	}
 
 	pub fn push<R>(&mut self, route: R)
-	where R: Route<D> + 'static {
+	where R: Route + 'static {
 		self.basic.push(Box::new(route))
 	}
 
 	pub fn push_catcher<C>(&mut self, catcher: C)
-	where C: Catcher<D> + 'static {
+	where C: Catcher + 'static {
 		self.catcher.push(Box::new(catcher))
 	}
 
 	pub fn route_raw(
 		&self,
 		hyper_request: &HyperRequest
-	) -> Option<&BoxedRawRoute<D>> {
+	) -> Option<&BoxedRawRoute> {
 		for route in &self.raw {
 			if route.check(hyper_request) {
 				return Some(route)
@@ -65,7 +62,7 @@ impl<D> Routes<D> {
 	pub fn route(
 		&self,
 		request_header: &RequestHeader
-	) -> Option<&BoxedRoute<D>> {
+	) -> Option<&BoxedRoute> {
 		for route in &self.basic {
 			if route.check( request_header ) {
 				return Some( route )
@@ -78,7 +75,7 @@ impl<D> Routes<D> {
 		&self,
 		request_header: &RequestHeader,
 		response_header: &ResponseHeader
-	) -> Option<&BoxedCatcher<D>> {
+	) -> Option<&BoxedCatcher> {
 		for catcher in &self.catcher {
 			if catcher.check(request_header, response_header) {
 				return Some(catcher)

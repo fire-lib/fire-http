@@ -1,7 +1,7 @@
 [package]
 name = "fire-http"
 description = "Http async library based on hyper and tokio"
-version = "0.2.12"
+version = "0.3.0-rc.1"
 authors = ["Sören Meier <info@s-me.ch>"]
 repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
@@ -13,9 +13,8 @@ all-features = true
 [features]
 default = ["http1"]
 
-json = ["serde", "serde_json", "http/json"]
+json = ["serde", "serde_json", "types/json"]
 fs = ["tokio/fs", "percent-encoding", "rand"]
-encdec = ["http/encdec"]
 http1 = ["hyper/http1"]
 http2 = ["hyper/http2"]
 ws = ["tokio-tungstenite", "futures-util", "base64", "sha-1"]
@@ -51,13 +50,13 @@ name = "ws"
 required-features = ["ws"]
 
 [dependencies]
-http = { package = "fire-http-representation", version = "0.1.6", features = ["hyper_body", "timeout"] }
-hyper = { version = "0.14", features = ["tcp", "server"] }
+# types = { package = "fire-http-representation", version = "0.2.0-rc.1" }
+types = { package = "fire-http-representation", version = "0.2.0-rc.1", path = "./../fire-http-representation" }
+hyper = { version = "1.0.0-rc.1", features = ["server"] }
 bytes = "1.0"
-hyper_http = { package = "http", version = "0.2" }
 serde_json = { version = "1.0", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
-tokio = { version = "1.0", optional = true }
+tokio = { version = "1.0", features = ["net"] }
 percent-encoding = { version = "2.1", optional = true }
 rand = { version = "0.8", optional = true }
 tracing = { version = "0.1" }
@@ -68,4 +67,5 @@ sha-1 = { version = "0.10", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
-hyper = { version = "0.14", features = ["tcp", "server", "client"] }
+hyper = { version = "1.0.0-rc.1", features = ["http1", "server", "client"] }
+tracing-subscriber = "0.3"

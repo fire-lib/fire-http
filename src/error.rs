@@ -1,9 +1,7 @@
+use crate::header::StatusCode;
 
 use std::{fmt, error, io};
 use error::Error as ErrorTrait;
-
-use http::header::StatusCode;
-use http::bytes_stream::SizeLimitReached;
 
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -47,7 +45,7 @@ impl Error {
 		}
 	}
 
-	/// Returns a new error from an io::Error originated from the client.
+	/// Returns a new error from an io::Error originating from the client.
 	pub fn from_client_io(error: io::Error) -> Self {
 		// try to detect if source is known to us
 		Self::new(
@@ -67,6 +65,19 @@ impl<T> From<T> for Error
 where T: Into<ErrorKind> {
 	fn from(e: T) -> Self {
 		Self::empty(e)
+	}
+}
+
+#[cfg(feature = "json")]
+mod deserialize_error {
+	use super::*;
+
+	use types::request::DeserializeError;
+
+	impl From<DeserializeError> for Error {
+		fn from(e: DeserializeError) -> Self {
+			Self::new(ClientErrorKind::BadRequest, e)
+		}
 	}
 }
 
@@ -104,7 +115,7 @@ impl From<ServerErrorKind> for ErrorKind {
 
 
 macro_rules! error_kind {
-	($name:ident, $($kind:ident),*) => (
+	($name:ident, $($kind:ident => $status:ident),*) => (
 		#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 		pub enum $name {
 			$($kind),*
@@ -113,7 +124,7 @@ macro_rules! error_kind {
 		impl From<$name> for StatusCode {
 			fn from(k: $name) -> Self {
 				match k {
-					$($name::$kind => Self::$kind),*
+					$($name::$kind => Self::$status),*
 				}
 			}
 		}
@@ -122,43 +133,36 @@ macro_rules! error_kind {
 
 // impl ClientErrorKind
 error_kind!( ClientErrorKind,
-	BadRequest,
-	Unauthorized,
-	PaymentRequired,
-	Forbidden,
-	NotFound,
-	MethodNotAllowed,
-	NotAcceptable,
-	ProxyAuthenticationRequired,
-	RequestTimeout,
-	Conflict,
-	Gone,
-	LengthRequired,
-	PreconditionFailed,
-	RequestEntityTooLarge,
-	RequestURITooLarge,
-	UnsupportedMediaType,
-	RequestedRangeNotSatisfiable,
-	ExpectationFailed
+	BadRequest => BAD_REQUEST,
+	Unauthorized => UNAUTHORIZED,
+	PaymentRequired => PAYMENT_REQUIRED,
+	Forbidden => FORBIDDEN,
+	NotFound => NOT_FOUND,
+	MethodNotAllowed => METHOD_NOT_ALLOWED,
+	NotAcceptable => NOT_ACCEPTABLE,
+	ProxyAuthenticationRequired => PROXY_AUTHENTICATION_REQUIRED,
+	RequestTimeout => REQUEST_TIMEOUT,
+	Conflict => CONFLICT,
+	Gone => GONE,
+	LengthRequired => LENGTH_REQUIRED,
+	PreconditionFailed => PRECONDITION_FAILED,
+	RequestEntityTooLarge => PAYLOAD_TOO_LARGE,
+	RequestURITooLarge => URI_TOO_LONG,
+	UnsupportedMediaType => UNSUPPORTED_MEDIA_TYPE,
+	RequestedRangeNotSatisfiable => RANGE_NOT_SATISFIABLE,
+	ExpectationFailed => EXPECTATION_FAILED
 );
 
 impl ClientErrorKind {
 	/// Converts an io::Error into the appropriate kind.
 	pub fn from_io(error: &io::Error) -> Self {
-		// first try to detect the source
-		if let Some(src) = error.get_ref() {
-			if src.is::<SizeLimitReached>() {
-				return Self::RequestEntityTooLarge
-			}
-		}
-
 		use io::ErrorKind::*;
-		// try to detect if source is known to us
 		match error.kind() {
 			NotFound => Self::NotFound,
 			PermissionDenied => Self::Unauthorized,
 			// this should probably not happen?
 			AlreadyExists => Self::Conflict,
+			UnexpectedEof => Self::RequestEntityTooLarge,
 			InvalidInput |
 			InvalidData |
 			Other => Self::BadRequest,
@@ -170,9 +174,9 @@ impl ClientErrorKind {
 
 // Impl ServerErrorKind
 error_kind!( ServerErrorKind,
-	InternalServerError,
-	NotImplemented,
-	BadGateway,
-	ServiceUnavailable,
-	GatewayTimeout
+	InternalServerError => INTERNAL_SERVER_ERROR,
+	NotImplemented => NOT_IMPLEMENTED,
+	BadGateway => BAD_GATEWAY,
+	ServiceUnavailable => SERVICE_UNAVAILABLE,
+	GatewayTimeout => GATEWAY_TIMEOUT
 );

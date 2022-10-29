@@ -1,5 +1,6 @@
-
+use crate::{Response, Body};
 use crate::into::IntoResponse;
+use crate::header::{RequestHeader, StatusCode, Mime};
 
 use std::fmt;
 use std::path::Path;
@@ -12,8 +13,6 @@ use std::convert::TryInto;
 use tokio::{io, fs};
 use io::AsyncSeekExt;
 
-use http::header::{ RequestHeader, StatusCode, Mime };
-use http::{Response, Body};
 
 #[derive(Debug, Clone)]
 pub struct Range {
@@ -22,9 +21,7 @@ pub struct Range {
 }
 
 impl Range {
-
 	pub fn parse(header: &RequestHeader) -> Option<Self> {
-
 		let range = header.value("range")?;
 		if !range.starts_with("bytes=") {
 			return None
@@ -44,82 +41,64 @@ impl Range {
 
 		Some(Self { start, end })
 	}
-
-	/*pub async fn into_response( self, path: PathBuf ) -> Result<Response> {
-
-		let file = try_not_found!( File::open( path ).await );
-		let metadata = try_not_found!( file.metadata().await );
-		let size = metadata.len();
-		let start = self.start;
-		let end = self.end.unwrap_or( size - 1 );
-
-		if end < 0 || end >= size || start > end {
-			return Err( Error::NotFound )
-		}
-
-		// apache no-gzip
-		// content type
-
-	}*/
-
 }
 
 pub struct PartialFile {
 	file: fs::File,
 	mime_type: Mime,
+	// the size in bytes of the entire file
 	size: usize,
+	// where to start reading
 	start: usize,
+	// at which byte to stop reading (inclusive)
 	end: usize
 }
 
 impl PartialFile {
-
-	/*pub fn new<M>( file: fs::File, mime_type: M, range: Range ) -> Self
-	where M: Into<Mime> {
-		Self { file, mime_type: mime_type.into(), range }
-	}*/
-
-	/// returns not found if path is directory
+	/// returns not found if the path is not a directory
 	pub async fn open<P>(path: P, range: Range) -> io::Result<Self>
 	where P: AsRef<Path> {
-
 		let extension = path.as_ref()
 			.extension()
 			.and_then(|f| f.to_str());
 
-		let mime_type = match extension {
-			Some(e) => Mime::from_ext(e),
-			None => Mime::Binary
-		};
+		let mime_type = extension
+			.and_then(Mime::from_extension)
+			.unwrap_or(Mime::BINARY);
 
-		let mut file = fs::File::open( path ).await?;
+		let mut file = fs::File::open(path).await?;
 		let metadata = file.metadata().await?;
 
 		// make sure we open a file
 		if !metadata.is_file() {
-			return Err(io::Error::new(io::ErrorKind::NotFound, "expected file found folder"))
+			return Err(io::Error::new(
+				io::ErrorKind::NotFound,
+				"expected file found folder"
+			))
 		}
 
 		let size: usize = metadata.len().try_into()
-			.map_err(|_| io::Error::new(io::ErrorKind::NotFound, "file to large"))?;
+			.map_err(|_| io::Error::new(
+				io::ErrorKind::NotFound,
+				"file to large"
+			))?;
 		let start = range.start;
-		let end = range.end.unwrap_or( size - 1 );
+		let end = range.end.unwrap_or(size - 1);
 
 		if end >= size || start >= end {
-			return Err(io::Error::new(io::ErrorKind::Other, RangeIncorrect(range)))
+			return Err(io::Error::new(
+				io::ErrorKind::Other,
+				RangeIncorrect(range)
+			))
 		}
 
-		file.seek( SeekFrom::Start(start as u64) ).await?;
+		file.seek(SeekFrom::Start(start as u64)).await?;
 
 		// apache no-gzip
 		// content type
 
-		Ok( Self {
-			file, mime_type,
-			size, start, end
-		} )
+		Ok(Self { file, mime_type, size, start, end })
 	}
-
 }
 
 
@@ -137,17 +116,16 @@ impl std::error::Error for RangeIncorrect {}
 
 // TODO NEED TO CHANGE u64
 // A File which streams a range
-pub struct FixedFile {
+struct FixedFile {
 	file: fs::File,
-	read: usize,
-	len: usize
+	remaining: u64
 }
 
 impl FixedFile {
-	pub fn new( file: fs::File, len: usize ) -> Self {
+	pub fn new(file: fs::File, len: u64) -> Self {
 		Self {
-			file, len,
-			read: 0
+			file,
+			remaining: len
 		}
 	}
 }
@@ -156,79 +134,66 @@ impl io::AsyncRead for FixedFile {
 	fn poll_read(
 		mut self: Pin<&mut Self>,
 		cx: &mut Context,
-		buf: &mut io::ReadBuf<'_>
+		buf: &mut io::ReadBuf
 	) -> Poll<io::Result<()>> {
-
-		// if finished ready
-		if self.read >= self.len {
-			debug_assert!(self.read == self.len);
+		// if finished reading
+		if self.remaining == 0 {
 			return Poll::Ready(Ok(()))
 		}
 
-		// how much can we read??
-		// max self.buf.len()
-		// remaining self.len - self.read
-		let remaining = self.len - self.read;
+		// take a max amount of buffer to not write to much
+		let mut buf = buf.take(self.remaining.try_into().unwrap_or(usize::MAX));
+		debug_assert!(buf.filled().is_empty());
 
-		// there is less to write then we have buffer capacity
-		// we need to use a new ReadBuf
-		if remaining < buf.remaining() {
-			// we need to initialize the remaining
-			// could be made better
-			// but needs unsafe
-			// TODO do it
-			let n_slice = buf.initialize_unfilled_to(remaining);
-			let mut n_buf = io::ReadBuf::new(n_slice);
-			debug_assert!(n_buf.filled().len() == 0);
-
-			// read first data
-			let res = Pin::new(&mut self.file).poll_read(cx, &mut n_buf);
-
-			// calculate how much was read
-			let read = n_buf.filled().len();
-
-			self.read += read;
-			buf.advance(read);
-
-			res
-		} else {
-			// we can use the normal buffer
-			let before_len = buf.filled().len();
-
-			// read first data
-			let res = Pin::new(&mut self.file).poll_read(cx, buf);
-
-			// calculate how much was read
-			let read = buf.filled().len() - before_len;
-			self.read += read;
-
-			res
+		let res = Pin::new(&mut self.file).poll_read(cx, &mut buf);
+		match res {
+			Poll::Ready(Ok(_)) => {},
+			Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+			Poll::Pending => return Poll::Pending
 		}
+
+		let read = buf.filled().len();
+
+		if read == 0 {
+			return Poll::Ready(Err(io::Error::new(
+				io::ErrorKind::UnexpectedEof,
+				"The file is to short"
+			)))
+		}
+
+		self.remaining = self.remaining.checked_sub(read as u64).unwrap();
+
+		Poll::Ready(Ok(()))
 	}
 }
 
 
 impl IntoResponse for PartialFile {
-	fn into_response( self ) -> Response {
-
+	fn into_response(self) -> Response {
 		let len = (self.end + 1) - self.start;
 
 		let response = Response::builder()
-			.status_code(StatusCode::PartialContent)
+			.status_code(StatusCode::PARTIAL_CONTENT)
 			.content_type(self.mime_type)
-			.header("Accept-Ranges", "bytes")
-			.header("Content-Length", len)
-			.header("Content-Range", format!( "bytes {}-{}/{}", self.start, self.end, self.size ));
+			.header("accept-ranges", "bytes")
+			.header("content-length", len)
+			.header(
+				"content-range",
+				format!("bytes {}-{}/{}", self.start, self.end, self.size)
+			);
 
-		// if we can read to the end
-		// return every thing after self.start
+		// the file is already at the correct start
+		// since open did that
+
+		// if self.end points to the end of the file just return the file
+		// without limiting the reading
 		if self.end + 1 == self.size {
-			response.body(Body::from_async_read(self.file))
+			response.body(Body::from_async_reader(self.file))
+				.build()
 		} else {
-			let fixed_file = FixedFile::new(self.file, len);
-			response.body(Body::from_async_read(fixed_file))
+			let fixed_file = FixedFile::new(self.file, len as u64);
+			response.body(Body::from_async_reader(fixed_file))
+				.build()
 		}
-		// response
-		.build()
 	}
 }

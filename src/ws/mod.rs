@@ -1,4 +1,4 @@
-
+use std::fmt;
 use std::str::Utf8Error;
 
 use tracing::{error, warn};
@@ -41,116 +41,103 @@ ws_route!(MyRoute, "path", |ws, data| {
 /// Because this spawns a new task it will clone every used data
 #[macro_export]
 macro_rules! ws_route {
-	($name:ident, $($tt:tt)*) => (
-		$crate::ws_route!($name<Data>, $($tt)*);
-	);
 	(
-		$name:ident<$data_ty:ty>, $path:expr,
+		$name:ident, $path:expr,
 		|$ws:ident| $block:block
 	) => (
-		$crate::ws_route!($name<$data_ty>, $path, |$ws,| -> () $block);
+		$crate::ws_route!($name, $path, |$ws,| -> () $block);
 	);
 	(
-		$name:ident<$data_ty:ty>, $path:expr,
-		|$ws:ident| -> $ret_type:ty $block:block
+		$name:ident, $path:expr,
+		|$ws:ident| -> $ret_ty:ty $block:block
 	) => (
-		$crate::ws_route!($name<$data_ty>, $path, |$ws,| -> $ret_type $block);
+		$crate::ws_route!($name, $path, |$ws,| -> $ret_ty $block);
 	);
 	(
-		$name:ident<$data_ty:ty>, $path:expr,
-		|$ws:ident| -> $ret_type:ty $block:block,
-		|$ret:ident| $ret_block:block
+		$name:ident, $path:expr,
+		|$ws:ident, $($data:ident: $data_ty:ty),*| -> $ret_ty:ty $block:block
 	) => (
-		$crate::ws_route!(
-			$name<$data_ty>, $path,
-			|$ws,| -> $ret_type $block,
-			|$ret| $ret_block
-		);
-	);
-	(
-		$name:ident<$data_ty:ty>, $path:expr,
-		|$ws:ident, $( $data:ident ),*| -> $ret_type:ty $block:block
-	) => (
-		$crate::ws_route!(
-			$name<$data_ty>, $path,
-			|$ws, $($data),*| -> $ret_type $block, |ret| { ret }
-		);
-	);
-	(
-		$name:ident<$data_ty:ty>, $path:expr,
-		|$ws:ident, $( $data:ident ),*| -> $ret_type:ty $block:block,
-		|$ret:ident| $ret_block:block
-	) => (
-
 		pub struct $name;
 
-		impl $crate::routes::RawRoute<$data_ty> for $name {
+		impl $crate::routes::RawRoute for $name {
+			fn check(
+				&self,
+				req: &$crate::routes::HyperRequest
+			) -> bool {
+				req.method() == $crate::header::Method::GET &&
+				$crate::routes::check_static(req.uri().path(), $path)
+			}
 
-			fn check(&self, req: &$crate::request::HyperRequest) -> bool {
-				req.method().as_str() == "GET" &&
-				$crate::routes::check_static( req.uri().path(), $path )
+			fn validate_data(&self, data: &$crate::Data) {
+				$(
+					assert!(data.exists::<$data_ty>());
+				)*
 			}
 
 			fn call<'a>(
 				&'a self,
-				req: &'a mut $crate::request::RequestBuilder<'_>,
-				raw_data: &'a $data_ty
+				req: &'a mut $crate::routes::HyperRequest,
+				raw_data: &'a $crate::Data
 			) -> $crate::util::PinnedFuture<'a,
-				Option<$crate::Result<$crate::http::Response>>
+				Option<$crate::Result<$crate::Response>>
 			> {
 
-				use $crate::into::IntoRouteResult;
+				async fn handler(
+					mut $ws: $crate::ws::WebSocket,
+					$( $data: $data_ty ),*
+				) -> $ret_ty {
+					$block
+				}
 
-				$crate::util::PinnedFuture::new( async move {
-
-					// allowed to unwrap (will not panic)
-					let hyper_req = req.hyper_mut().unwrap();
-
+				$crate::util::PinnedFuture::new(async move {
 					// if headers not match for websocket
 					// return bad request
-					let header_upgrade = hyper_req.headers()
+					let header_upgrade = req.headers()
 						.get("upgrade")
 						.and_then(|v| v.to_str().ok());
-					let header_version = hyper_req.headers()
+					let header_version = req.headers()
 						.get("sec-websocket-version")
 						.and_then(|v| v.to_str().ok());
-					let websocket_key = hyper_req.headers()
+					let websocket_key = req.headers()
 						.get("sec-websocket-key")
 						.map(|v| v.as_bytes());
 
 					if !matches!(
 						(header_upgrade, header_version, websocket_key),
-						(Some("websocket"), Some("13"), Some(k))
+						(Some("websocket"), Some("13"), Some(_))
 					) {
 						return Some(Err(
 							$crate::error::ClientErrorKind::BadRequest.into()
 						))
 					}
 
-
 					// calculate websocket key stuff
 					// unwrap does not fail because we check above
 					let websocket_key = websocket_key.unwrap();
 					let ws_accept = $crate::ws::ws_accept(websocket_key);
 
-					$( let mut $data = raw_data.$data().clone(); )*
+					$(
+						let $data = raw_data.get::<$data_ty>().unwrap().clone();
+					)*
 
-					let on_upgrade = $crate::ws::upgrade::on(hyper_req);
-
+					let on_upgrade = $crate::ws::upgrade::on(req);
 
 					// we need to spawn a future because
-					// upgrade on can only be fufilled after
+					// upgrade on can only be fulfilled after
 					// we send SWITCHING_PROTOCOLS
 					tokio::task::spawn(async move {
 						match on_upgrade.await {
 							Ok(upgraded) => {
-								let mut $ws = $crate::ws::WebSocket::new(
+								let ws = $crate::ws::WebSocket::new(
 									upgraded
 								).await;
-								let $ret: $ret_type = async move {
-									$block
-								}.await;
-								let _: () = { $ret_block };
+
+								let ret = handler(
+									ws,
+									$( $data ),*
+								).await;
+
+								$crate::ws::log_websocket_return(ret);
 							},
 							Err(e) => $crate::ws::upgrade_error(e)
 						}
@@ -158,16 +145,17 @@ macro_rules! ws_route {
 
 
 					Some(Ok(
-						$crate::http::Response::builder()
-							.status_code($crate::http::header::StatusCode::SwitchingProtocols)
+						$crate::Response::builder()
+							.status_code(
+								$crate::header::StatusCode::SWITCHING_PROTOCOLS
+							)
 							.header("connection", "upgrade")
 							.header("upgrade", "websocket")
 							.header("sec-websocket-accept", ws_accept)
 							.build()
 					))
-				} )
+				})
 			}
-
 		}
 
 	)
@@ -180,6 +168,36 @@ macro_rules! ws_route {
 #[doc(hidden)]
 pub fn upgrade_error(e: hyper::Error) {
 	error!("websocket upgrade error {:?}", e);
+}
+
+pub trait LogWebSocketReturn: fmt::Debug {
+	fn should_log_error(&self) -> bool;
+}
+
+impl<T, E> LogWebSocketReturn for Result<T, E>
+where
+	T: fmt::Debug,
+	E: fmt::Debug
+{
+	fn should_log_error(&self) -> bool {
+		self.is_err()
+	}
+}
+
+impl LogWebSocketReturn for () {
+	fn should_log_error(&self) -> bool {
+		false
+	}
+}
+
+/// we need to expose this instead of inlining it in the macro since
+/// tracing logs the crate name and we wan't it to be associated with
+/// fire http instead of the crate that uses the macro
+#[doc(hidden)]
+pub fn log_websocket_return(r: impl LogWebSocketReturn) {
+	if r.should_log_error() {
+		error!("websocket connection closed with error {:?}", r);
+	}
 }
 
 // does the key need to be a specific length?

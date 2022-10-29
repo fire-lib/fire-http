@@ -7,37 +7,26 @@ A simple http server library.
 ## Example
 ```rust no_run
 # use fire_http as fire;
-use fire::{data_struct, get};
+use fire::get;
 
-// To access data from request handlers
-data_struct! {
-	#[derive(Debug)]
-	struct Data {
-		global_name: String
-	}
-}
+struct GlobalName(String);
 
 // handle a simple get request
-get! {
-	Root, "/",
-	|_r, global_name| -> String {
-		format!("Hi, this is {}", global_name)
+get! { Root, "/",
+	|_r, global_name: GlobalName| -> String {
+		format!("Hi, this is {}", global_name.0)
 	}
 }
 
 #[tokio::main]
 async fn main() {
-	let data = Data {
-		global_name: "fire".into()
-	};
-
-	let mut server = fire::build("0.0.0.0:3000", data)
+	let mut server = fire::build("0.0.0.0:3000").await
 		.expect("Failed to parse address");
 
+	server.add_data(GlobalName("fire".into()));
 	server.add_route(Root);
 
-	server.light().await
-		.expect("server paniced");
+	server.light().await.unwrap();
 }
 ```
 
@@ -46,6 +35,5 @@ For more examples look in the examples directory and the test directory.
 ## Features
 - json
 - fs
-- encdec (adds percent encoding and decoding to header values)
 - http2 (enables http 2 support)
 - ws (adds websocket support)

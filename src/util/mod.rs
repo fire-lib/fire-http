@@ -1,6 +1,8 @@
 
-use crate::request::{Request, HyperRequest};
+use crate::{Request, Response, Body};
+use crate::server::HyperRequest;
 use crate::fire::RequestConfigs;
+use crate::header::ContentType;
 
 use std::task::Poll;
 use std::pin::Pin;
@@ -8,12 +10,13 @@ use std::future::Future;
 use std::task::Context;
 use std::net::SocketAddr;
 
+use tracing::error;
+
 mod header;
-use header::{ convert_hyper_parts_to_fire_header, convert_fire_header_to_hyper_header/* HyperHeaderMap*/ };
+use header::{convert_hyper_parts_to_fire_header};
 pub use header::HeaderError;
 
-use http::Response;
-use http::body::{FireHttpBody, BodyWithTimeout};
+use types::body::BodyHttp;
 
 
 pub struct PinnedFuture<'a, O> {
@@ -48,31 +51,42 @@ pub(crate) fn convert_hyper_req_to_fire_req(
 
 	let (parts, body) = hyper_req.into_parts();
 
-	let body = BodyWithTimeout::from_hyper_body(
-		body,
-		configs.size_limit,
-		configs.timeout
-	);
+	let mut body = Body::from_incoming(body);
+	body.set_size_limit(Some(configs.size_limit));
+	body.set_timeout(Some(configs.timeout));
+
 	let header = convert_hyper_parts_to_fire_header(parts, address)?;
 
-	Ok( Request::new(header, body) )
+	Ok(Request::new(header, body))
 }
 
 
 // // Response
-pub(crate) fn convert_fire_res_to_hyper_res(response: Response) -> hyper::Response<FireHttpBody> {
+pub(crate) fn convert_fire_resp_to_hyper_resp(
+	response: Response
+) -> hyper::Response<BodyHttp> {
 
 	// debug_checks
 	#[cfg(debug_assertions)]
 	let _ = validate_content_length(&response);
 
-	// get parts
-	let (mut parts, _) = hyper::Response::builder()
-		.body(()).unwrap()
-		.into_parts();
-	convert_fire_header_to_hyper_header( &mut parts, response.header );
+	let mut header = response.header;
 
-	hyper::Response::from_parts(parts, response.body.into_http_body())
+	if !matches!(header.content_type, ContentType::None) {
+		let e = header.values.try_insert("content-type", header.content_type);
+		if let Err(e) = e {
+			error!("could not insert content type {:?}", e);
+		}
+	}
+
+	let mut builder = hyper::Response::builder()
+		.status(header.status_code);
+
+	*builder.headers_mut().unwrap() = header.values.into_inner();
+
+	// builder failes if any argument failed
+	// but no argument can fail that we pass here
+	builder.body(response.body.into_http_body()).unwrap()
 }
 
 

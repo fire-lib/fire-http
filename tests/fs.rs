@@ -1,5 +1,5 @@
-
 use fire_http as fire;
+use fire::Body;
 
 #[macro_use]
 mod util;
@@ -7,7 +7,6 @@ mod util;
 
 #[tokio::test]
 async fn read_file() {
-
 	// build route
 	fire::static_files!{ Css, "/css" => "./examples/www/css" }
 
@@ -34,7 +33,7 @@ async fn read_file() {
 
 	make_request!("GET", addr, "/css/style.css", |req| {
 		req.header("if-none-match", etag)
-			.body(hyper::Body::empty())
+			.body(Body::new().into_http_body())
 			.expect("could not build request")
 	}).await
 		.assert_status(304)
