@@ -1,7 +1,12 @@
 [package]
 name = "fire-http-codegen"
-version = "0.1.0"
+description = "Codegen for fire http"
+version = "0.1.0-rc.1"
+authors = ["Sören Meier <info@s-me.ch>"]
+repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+categories = ["web-programming"]
 
 [lib]
 proc_macro = true
@@ -36,3 +41,7 @@ fire = { package = "fire-http", version = "0.3.0-rc.1", path = "../fire-http", f
 fire-api = { package = "fire-http-api", version = "0.2.0-rc.1", path = "../fire-http-api", features = ["stream"] }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
