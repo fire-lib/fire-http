@@ -8,7 +8,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [features]
-stream = ["fire/ws"]
+stream = ["fire/ws", "codegen/stream"]
 ## Trace logging is only enabled with this feature
 trace = []
 

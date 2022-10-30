@@ -11,7 +11,7 @@ pub trait RawRoute: Send + Sync {
 	fn check(&self, req: &HyperRequest) -> bool;
 
 	// check if every data you expect is in Data
-	fn validate_data(&self, data: &Data);
+	fn validate_data(&self, _data: &Data) {}
 
 	fn call<'a>(
 		&'a self,

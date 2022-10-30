@@ -1,11 +1,10 @@
 use crate::{Method, TransformOutput};
 use crate::Args;
+use crate::util::{fire_http_crate, validate_signature};
 
-use proc_macro2::{TokenStream, Ident, Span};
-use syn::{Result, Error, ItemFn, Signature, FnArg, Type};
+use proc_macro2::TokenStream;
+use syn::{Result, Error, ItemFn, FnArg, Type};
 use quote::{quote, format_ident};
-
-use proc_macro_crate::{crate_name, FoundCrate};
 
 
 pub(crate) fn expand(
@@ -173,30 +172,6 @@ pub(crate) fn expand(
 	))
 }
 
-pub(crate) fn validate_signature(sig: &Signature) -> Result<()> {
-	if let Some(con) = &sig.constness {
-		return Err(Error::new(con.span, "const not allowed"))
-	}
-
-	if let Some(unsf) = &sig.unsafety {
-		return Err(Error::new(unsf.span, "unsafe not allowed"))
-	}
-
-	if let Some(abi) = &sig.abi {
-		return Err(Error::new_spanned(abi, "abi not allowed"))
-	}
-
-	if !sig.generics.params.is_empty() {
-		return Err(Error::new_spanned(&sig.generics, "generics not allowed"))
-	}
-
-	if let Some(variadic) = &sig.variadic {
-		return Err(Error::new_spanned(&variadic, "variadic not allowed"))
-	}
-
-	Ok(())
-}
-
 pub(crate) fn generate_struct(item: &ItemFn) -> TokenStream {
 	let struct_name = &item.sig.ident;
 	let attrs = &item.attrs;
@@ -216,25 +191,4 @@ pub(crate) fn detect_dyn_uri(args_uri: &str) -> (bool, String) {
 		.to_string();
 
 	(dyn_route, uri)
-}
-
-// Util Functions
-
-pub(crate) fn fire_http_crate() -> Result<TokenStream> {
-	let name = crate_name("fire-http")
-		.map_err(|e| Error::new(Span::call_site(), e))?;
-
-	Ok(match name {
-		// if it get's used inside fire_http it is a test or an example
-		FoundCrate::Itself => quote!(fire_http),
-		FoundCrate::Name(n) => {
-			let ident = Ident::new(&n, Span::call_site());
-			quote!(#ident)
-		}
-	})
-}
-
-#[allow(dead_code)]
-fn call_site_err(msg: &'static str) -> Error {
-	Error::new(Span::call_site(), msg)
 }

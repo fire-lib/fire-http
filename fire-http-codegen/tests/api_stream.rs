@@ -2,8 +2,8 @@ use fire_api as api;
 
 use std::fmt;
 
-use api::{Method, Request};
 use api::error::{ApiError, Error as ErrorTrait, StatusCode};
+use api::stream::{Stream, StreamKind, Streamer};
 
 use serde::{Serialize, Deserialize};
 
@@ -38,26 +38,34 @@ impl fmt::Display for Error {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct NameReq;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Name {
-	firstname: String,
-	lastname: String
+struct SenderReq {
+	count: u64
 }
 
-impl Request for NameReq {
-	type Response = Name;
+#[derive(Debug, Serialize, Deserialize)]
+struct SenderMsg {
+	lucky_number: u64
+}
+
+impl Stream for SenderReq {
+	type Message = SenderMsg;
 	type Error = Error;
 
-	const PATH: &'static str = "/name";
-	const METHOD: Method = Method::GET;
+	const KIND: StreamKind = StreamKind::Sender;
+	const ACTION: &'static str = "Hi";
 }
 
-#[fire::api(NameReq)]
-fn get_name(_: NameReq) -> Result<Name, Error> {
-	Ok(Name {
-		firstname: "Albert".into(),
-		lastname: "Einstein".into()
-	})
+#[fire::api_stream(SenderReq)]
+async fn lucky_number_stream(
+	req: SenderReq,
+	mut streamer: Streamer<SenderMsg>
+) -> Result<(), Error> {
+	for i in 0..req.count {
+		streamer.send(SenderMsg {
+			lucky_number: i
+		}).await
+			.map_err(|e| Error::Internal(e.to_string()))?;
+	}
+
+	Ok(())
 }

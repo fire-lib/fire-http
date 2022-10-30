@@ -4,6 +4,9 @@ mod args;
 mod ws;
 #[cfg(feature = "api")]
 mod api;
+#[cfg(all(feature = "api", feature = "stream"))]
+mod api_stream;
+mod util;
 
 use args::Args;
 #[cfg(feature = "api")]
@@ -106,6 +109,19 @@ pub fn api(attrs: TokenStream, item: TokenStream) -> TokenStream {
 	let item = parse_macro_input!(item as ItemFn);
 
 	let stream = api::expand(args, item);
+
+	stream
+		.map(|stream| stream.into())
+		.unwrap_or_else(to_compile_error)
+}
+
+#[proc_macro_attribute]
+#[cfg(all(feature = "api", feature = "stream"))]
+pub fn api_stream(attrs: TokenStream, item: TokenStream) -> TokenStream {
+	let args = parse_macro_input!(attrs as ApiArgs);
+	let item = parse_macro_input!(item as ItemFn);
+
+	let stream = api_stream::expand(args, item);
 
 	stream
 		.map(|stream| stream.into())

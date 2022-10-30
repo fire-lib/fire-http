@@ -1,19 +1,12 @@
 use crate::ApiArgs;
-use crate::route::{validate_signature, generate_struct};
+use crate::route::generate_struct;
+use crate::util::{
+	validate_signature, fire_api_crate, validate_inputs_ref_or_owned, ref_type
+};
 
-use proc_macro2::{TokenStream, Span, Ident};
-use syn::{Result, Error, ItemFn, FnArg, Type, TypeReference};
+use proc_macro2::{TokenStream};
+use syn::{Result, ItemFn};
 use quote::quote;
-
-use proc_macro_crate::{crate_name, FoundCrate};
-
-
-fn ref_type(ty: &Type) -> Option<&TypeReference> {
-	match ty {
-		Type::Reference(r) => Some(r),
-		_ => None
-	}
-}
 
 
 pub(crate) fn expand(
@@ -27,29 +20,7 @@ pub(crate) fn expand(
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
-	let mut input_types = vec![];
-
-	for fn_arg in item.sig.inputs.iter() {
-		let ty = match fn_arg {
-			FnArg::Receiver(r) => {
-				return Err(Error::new_spanned(r, "self not allowed"))
-			},
-			FnArg::Typed(t) => &t.ty
-		};
-
-		if let Some(reff) = ref_type(&ty) {
-			if let Some(mu) = reff.mutability {
-				return Err(Error::new_spanned(mu, "&mut not supported"))
-			}
-
-			if let Some(lifetime) = &reff.lifetime {
-				return Err(Error::new_spanned(lifetime, "lifetimes not \
-					supported"))
-			}
-		}
-
-		input_types.push(ty);
-	}
+	let input_types = validate_inputs_ref_or_owned(item.sig.inputs.iter())?;
 
 
 	let struct_name = &item.sig.ident;
@@ -194,18 +165,4 @@ pub(crate) fn expand(
 			#call_fn
 		}
 	))
-}
-
-pub(crate) fn fire_api_crate() -> Result<TokenStream> {
-	let name = crate_name("fire-http-api")
-		.map_err(|e| Error::new(Span::call_site(), e))?;
-
-	Ok(match name {
-		// if it get's used inside fire_http it is a test or an example
-		FoundCrate::Itself => quote!(fire_http_api),
-		FoundCrate::Name(n) => {
-			let ident = Ident::new(&n, Span::call_site());
-			quote!(#ident)
-		}
-	})
 }

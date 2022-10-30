@@ -11,14 +11,12 @@
 //! Server > kind: SenderClose action: "MyAction" data: null|error
 //! ```
 
-
-mod macros;
 pub mod message;
 pub mod server;
 mod stream;
 pub mod streamer;
 pub mod error;
-mod poll_fn;
+pub mod util;
 
 pub use server::StreamServer;
 pub use stream::{StreamKind, Stream};

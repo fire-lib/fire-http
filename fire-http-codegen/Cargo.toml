@@ -14,10 +14,16 @@ required-features = ["ws"]
 name = "api_route"
 required-features = ["api"]
 
+[[test]]
+name = "api_stream"
+required-features = ["api", "stream"]
+
 [features]
 json = []
 ws = []
 api = []
+# requires the api feature to be set
+stream = []
 
 [dependencies]
 proc-macro2 = "1.0"
@@ -27,5 +33,6 @@ proc-macro-crate = "1.2"
 
 [dev-dependencies]
 fire = { package = "fire-http", version = "0.3.0-rc.1", path = "../fire-http", features = ["ws", "json"] }
-fire-api = { package = "fire-http-api", version = "0.2.0-rc.1", path = "../fire-http-api" }
+fire-api = { package = "fire-http-api", version = "0.2.0-rc.1", path = "../fire-http-api", features = ["stream"] }
 serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }

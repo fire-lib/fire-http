@@ -1,27 +1,24 @@
-
-use super::stream::StreamKind;
+use super::stream::{Stream, StreamKind};
 use super::message::{Message, MessageData, MessageKind};
 use super::streamer::RawStreamer;
 use super::error::UnrecoverableError;
-use super::poll_fn::poll_fn;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::task::Poll;
+use std::future::poll_fn;
 
 use tokio::sync::mpsc;
 use tokio::time::{interval, Duration};
 
 use tracing::error;
 
-pub use http::util::PinnedFuture;
-use http::response::Response;
-use http::error::{ClientErrorKind};
-use http::header::{StatusCode};
-use http::routes::RawRoute;
-use http::request::{HyperRequest, RequestBuilder};
-use http::ws::{WebSocket, JsonError};
+pub use fire::util::PinnedFuture;
+use fire::{Response, Data};
+use fire::header::Method;
+use fire::routes::{RawRoute, HyperRequest};
+use fire::ws::{self, WebSocket, JsonError};
 
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -30,12 +27,15 @@ struct Request {
 	kind: StreamKind
 }
 
-pub trait StreamHandler {
-	/// get's only called once on insertion
-	fn action(&self) -> &'static str;
+pub trait IntoStreamHandler {
+	type Stream: Stream;
+	type Handler: StreamHandler;
 
-	/// get's only called once on insertion
-	fn kind(&self) -> StreamKind;
+	fn into_handler(self) -> Self::Handler;
+}
+
+pub trait StreamHandler {
+	fn validate_data(&self, _data: &Data) {}
 
 	/// every MessageData needs to correspond with the StreamTrait
 	/// 
@@ -64,13 +64,16 @@ impl StreamServer {
 	}
 
 	pub fn insert<H>(&mut self, handler: H)
-	where H: StreamHandler + Send + Sync + 'static {
+	where
+		H: IntoStreamHandler,
+		H::Handler: StreamHandler + Send + Sync + 'static
+	{
 		Arc::get_mut(&mut self.inner).unwrap().insert(
 			Request {
-				action: handler.action().into(),
-				kind: handler.kind()
+				action: H::Stream::ACTION.into(),
+				kind: H::Stream::KIND
 			},
-			Box::new(handler)
+			Box::new(handler.into_handler())
 		);
 	}
 }
@@ -87,13 +90,13 @@ impl RawRoute for StreamServer {
 		data: &'a Data
 	) -> PinnedFuture<'a, Option<fire::Result<Response>>> {
 		PinnedFuture::new(async move {
-			let (on_upgraded, ws_accept) = match ws::util::upgrade(req) {
+			let (on_upgrade, ws_accept) = match ws::util::upgrade(req) {
 				Ok(o) => o,
 				Err(e) => return Some(Err(e))
 			};
 
 			let handlers = self.inner.clone();
-			let data = self.data.clone();
+			let data = data.clone();
 
 			// we need to spawn a future because
 			// upgrade on can only be fufilled after
@@ -111,7 +114,7 @@ impl RawRoute for StreamServer {
 						}
 
 					},
-					Err(e) => http::ws::upgrade_error(e)
+					Err(e) => ws::util::upgrade_error(e)
 				}
 			});
 
@@ -120,14 +123,13 @@ impl RawRoute for StreamServer {
 	}
 }
 
-async fn handle_connection<D: Send + Sync + 'static>(
-	handlers: Arc<HashMap<Request, Box<dyn StreamHandler<D> + Send + Sync>>>,
+async fn handle_connection(
+	handlers: Arc<HashMap<Request, Box<dyn StreamHandler + Send + Sync>>>,
 	mut ws: WebSocket,
-	data: D
+	data: Data
 ) -> Result<(), UnrecoverableError> {
 	let mut receivers = Receivers::new();
 	let mut senders = Senders::new();
-	let data = Arc::new(data);
 	// data: (Request, MessageData)
 	let (close_tx, mut close_rx) = mpsc::channel(10);
 	let mut ping_interval = interval(Duration::from_secs(30));
@@ -199,7 +201,7 @@ async fn handle_connection<D: Send + Sync + 'static>(
 							data: MessageData::null()
 						}).await.map_err(|e| e.to_string())?;
 
-						let data = Arc::clone(&data);
+						let data = data.clone();
 						let handlers = handlers.clone();
 						let msg_data = msg.data;
 						let close_tx = close_tx.clone();

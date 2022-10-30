@@ -5,8 +5,8 @@
 pub mod util;
 pub mod error;
 mod request;
-// #[cfg(feature = "stream")]
-// pub mod stream;
+#[cfg(feature = "stream")]
+pub mod stream;
 
 pub use error::ApiError;
 pub use request::{Request, Method};

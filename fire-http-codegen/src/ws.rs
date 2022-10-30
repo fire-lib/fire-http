@@ -1,11 +1,12 @@
 use crate::Args;
-use crate::route::{
-	fire_http_crate, validate_signature, generate_struct, detect_dyn_uri
+use crate::route::{generate_struct, detect_dyn_uri};
+use crate::util::{
+	fire_http_crate, validate_signature, validate_inputs_ref_or_owned, ref_type
 };
 
 use proc_macro2::TokenStream;
-use syn::{Result, Error, ItemFn, FnArg};
-use quote::{quote, format_ident};
+use syn::{Result, ItemFn};
+use quote::quote;
 
 
 pub(crate) fn expand(
@@ -17,18 +18,7 @@ pub(crate) fn expand(
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
-	let mut input_types = vec![];
-
-	for fn_arg in item.sig.inputs.iter() {
-		let ty = match fn_arg {
-			FnArg::Receiver(r) => {
-				return Err(Error::new_spanned(r, "self not allowed"))
-			},
-			FnArg::Typed(t) => &t.ty
-		};
-
-		input_types.push(ty);
-	}
+	let input_types = validate_inputs_ref_or_owned(item.sig.inputs.iter())?;
 
 
 	let struct_name = &item.sig.ident;
@@ -55,13 +45,20 @@ pub(crate) fn expand(
 		let mut asserts = vec![];
 
 		for ty in &input_types {
+			let valid_fn = match ref_type(&ty) {
+				Some(reff) => {
+					let elem = &reff.elem;
+					quote!(#fire::ws::util::valid_ws_data_as_ref::<#elem>)
+				},
+				None => {
+					quote!(#fire::ws::util::valid_ws_data_as_owned::<#ty>)
+				}
+			};
+
 			let error_msg = format!("could not find {}", quote!(#ty));
 
 			asserts.push(quote!(
-				assert!(
-					#fire::ws::util::valid_ws_data::<#ty>(data),
-					#error_msg
-				);
+				assert!(#valid_fn(data), #error_msg);
 			));
 		}
 
@@ -92,20 +89,21 @@ pub(crate) fn expand(
 			quote!()
 		};
 
-		let mut prepare_inputs = vec![];
 		let mut handler_args = vec![];
 
-		for (idx, ty) in input_types.iter().enumerate() {
-			let var_name = format_ident!("arg_{}", idx);
-
-			prepare_inputs.push(quote!(
-				let #var_name: Option<#ty> = #fire::ws::util::prepare_ws_data(
-					data
-				);
-			));
+		for ty in input_types {
+			let get_fn = match ref_type(&ty) {
+				Some(reff) => {
+					let elem = &reff.elem;
+					quote!(#fire::ws::util::get_ws_data_as_ref::<#elem>)
+				},
+				None => {
+					quote!(#fire::ws::util::get_ws_data_as_owned::<#ty>)
+				}
+			};
 
 			handler_args.push(quote!(
-				#fire::ws::util::get_ws_data(#var_name, &mut ws)
+				#get_fn(&data, &mut ws)
 			));
 		}
 
@@ -126,7 +124,7 @@ pub(crate) fn expand(
 						Err(e) => return Some(Err(e))
 					};
 
-					#(#prepare_inputs)*
+					let data = data.clone();
 
 					#fire::ws::util::spawn(async move {
 						match on_upgrade.await {
