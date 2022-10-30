@@ -1,6 +1,9 @@
 use crate::Response;
 use crate::into::IntoResponse;
-use crate::header::{RequestHeader, ResponseHeader, StatusCode};
+use crate::header::{
+	RequestHeader, ResponseHeader, StatusCode,
+	IF_NONE_MATCH, CACHE_CONTROL, ETAG
+};
 
 use std::fmt;
 use std::time::Duration;
@@ -75,7 +78,7 @@ impl Caching {
 	}
 
 	pub fn if_none_match(&self, header: &RequestHeader) -> bool {
-		header.value("if-none-match")
+		header.value(IF_NONE_MATCH)
 			.map(|none_match| {
 				none_match.len() == 30 &&
 				self.etag == none_match
@@ -94,11 +97,11 @@ impl Caching {
 		// 	}
 		// }
 
-		header.values.insert("Cache-Control", self.cache_control_string());
+		header.values.insert(CACHE_CONTROL, self.cache_control_string());
 
 		// etag makes only sense with files not 404
 		if header.status_code == StatusCode::OK {
-			header.values.insert("ETag", String::from(self.etag));
+			header.values.insert(ETAG, String::from(self.etag));
 		}
 	}
 }
@@ -107,8 +110,8 @@ impl IntoResponse for Caching {
 	fn into_response(self) -> Response {
 		Response::builder()
 			.status_code(StatusCode::NOT_MODIFIED)
-			.header("cache-control", self.cache_control_string())
-			.header("etag", String::from(self.etag))
+			.header(CACHE_CONTROL, self.cache_control_string())
+			.header(ETAG, String::from(self.etag))
 			.build()
 	}
 }

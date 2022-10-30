@@ -1,7 +1,9 @@
+pub mod util;
+
 use std::fmt;
 use std::str::Utf8Error;
 
-use tracing::{error, warn};
+use tracing::warn;
 
 #[doc(hidden)]
 pub use hyper::upgrade;
@@ -21,155 +23,6 @@ pub use tungstenite::{
 use futures_util::stream::StreamExt;
 use futures_util::sink::SinkExt;
 
-use sha1::Digest;
-
-// See: https://github.com/hyperium/hyper/blob/master/examples/upgrades.rs
-
-// we first need to implement raw routes
-
-/*
-// data might be needed to be cloned
-ws_route!(MyRoute, "path", |ws, data| {
-	// this is spawned in a new task
-	// anything happens here
-});
-*/
-
-// Basic Route
-/// Creates a WebSocket route
-///
-/// Because this spawns a new task it will clone every used data
-#[macro_export]
-macro_rules! ws_route {
-	(
-		$name:ident, $path:expr,
-		|$ws:ident| $block:block
-	) => (
-		$crate::ws_route!($name, $path, |$ws,| -> () $block);
-	);
-	(
-		$name:ident, $path:expr,
-		|$ws:ident| -> $ret_ty:ty $block:block
-	) => (
-		$crate::ws_route!($name, $path, |$ws,| -> $ret_ty $block);
-	);
-	(
-		$name:ident, $path:expr,
-		|$ws:ident, $($data:ident: $data_ty:ty),*| -> $ret_ty:ty $block:block
-	) => (
-		pub struct $name;
-
-		impl $crate::routes::RawRoute for $name {
-			fn check(
-				&self,
-				req: &$crate::routes::HyperRequest
-			) -> bool {
-				req.method() == $crate::header::Method::GET &&
-				$crate::routes::check_static(req.uri().path(), $path)
-			}
-
-			fn validate_data(&self, data: &$crate::Data) {
-				$(
-					assert!(data.exists::<$data_ty>());
-				)*
-			}
-
-			fn call<'a>(
-				&'a self,
-				req: &'a mut $crate::routes::HyperRequest,
-				raw_data: &'a $crate::Data
-			) -> $crate::util::PinnedFuture<'a,
-				Option<$crate::Result<$crate::Response>>
-			> {
-
-				async fn handler(
-					mut $ws: $crate::ws::WebSocket,
-					$( $data: $data_ty ),*
-				) -> $ret_ty {
-					$block
-				}
-
-				$crate::util::PinnedFuture::new(async move {
-					// if headers not match for websocket
-					// return bad request
-					let header_upgrade = req.headers()
-						.get("upgrade")
-						.and_then(|v| v.to_str().ok());
-					let header_version = req.headers()
-						.get("sec-websocket-version")
-						.and_then(|v| v.to_str().ok());
-					let websocket_key = req.headers()
-						.get("sec-websocket-key")
-						.map(|v| v.as_bytes());
-
-					if !matches!(
-						(header_upgrade, header_version, websocket_key),
-						(Some("websocket"), Some("13"), Some(_))
-					) {
-						return Some(Err(
-							$crate::error::ClientErrorKind::BadRequest.into()
-						))
-					}
-
-					// calculate websocket key stuff
-					// unwrap does not fail because we check above
-					let websocket_key = websocket_key.unwrap();
-					let ws_accept = $crate::ws::ws_accept(websocket_key);
-
-					$(
-						let $data = raw_data.get::<$data_ty>().unwrap().clone();
-					)*
-
-					let on_upgrade = $crate::ws::upgrade::on(req);
-
-					// we need to spawn a future because
-					// upgrade on can only be fulfilled after
-					// we send SWITCHING_PROTOCOLS
-					tokio::task::spawn(async move {
-						match on_upgrade.await {
-							Ok(upgraded) => {
-								let ws = $crate::ws::WebSocket::new(
-									upgraded
-								).await;
-
-								let ret = handler(
-									ws,
-									$( $data ),*
-								).await;
-
-								$crate::ws::log_websocket_return(ret);
-							},
-							Err(e) => $crate::ws::upgrade_error(e)
-						}
-					});
-
-
-					Some(Ok(
-						$crate::Response::builder()
-							.status_code(
-								$crate::header::StatusCode::SWITCHING_PROTOCOLS
-							)
-							.header("connection", "upgrade")
-							.header("upgrade", "websocket")
-							.header("sec-websocket-accept", ws_accept)
-							.build()
-					))
-				})
-			}
-		}
-
-	)
-}
-
-
-/// we need to expose this instead of inlining it in the macro since
-/// tracing logs the crate name and we wan't it to be associated with
-/// fire http instead of the crate that uses the macro
-#[doc(hidden)]
-pub fn upgrade_error(e: hyper::Error) {
-	error!("websocket upgrade error {:?}", e);
-}
-
 pub trait LogWebSocketReturn: fmt::Debug {
 	fn should_log_error(&self) -> bool;
 }
@@ -188,26 +41,6 @@ impl LogWebSocketReturn for () {
 	fn should_log_error(&self) -> bool {
 		false
 	}
-}
-
-/// we need to expose this instead of inlining it in the macro since
-/// tracing logs the crate name and we wan't it to be associated with
-/// fire http instead of the crate that uses the macro
-#[doc(hidden)]
-pub fn log_websocket_return(r: impl LogWebSocketReturn) {
-	if r.should_log_error() {
-		error!("websocket connection closed with error {:?}", r);
-	}
-}
-
-// does the key need to be a specific length?
-#[doc(hidden)]
-pub fn ws_accept(key: &[u8]) -> String {
-	let mut sha1 = sha1::Sha1::new();
-	sha1.update(key);
-	sha1.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-	// cannot fail because 
-	base64::encode(sha1.finalize())
 }
 
 #[cfg(feature = "json")]

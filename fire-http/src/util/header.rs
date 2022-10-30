@@ -1,17 +1,16 @@
+use crate::header::{RequestHeader, HeaderValues, Uri, HOST};
+
 use std::net::SocketAddr;
 
 use hyper::http::uri::{Authority, Scheme};
 
-use types::header::{RequestHeader, HeaderValues, Uri};
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HeaderError {
 	NoHost,
 	HostInvalid,
-	Uri,
-	// used for RequestBuilder
-	Unknown
+	Uri
 }
 
 
@@ -40,7 +39,7 @@ fn fill_uri(uri: Uri, headers: &HeaderValues) -> Result<Uri> {
 	parts.scheme = Some(Scheme::HTTP);
 
 	// get host infos
-	let host = headers.get("host").ok_or(HeaderError::NoHost)?;
+	let host = headers.get(HOST).ok_or(HeaderError::NoHost)?;
 
 	parts.authority = Some(
 		Authority::try_from(host.as_bytes())

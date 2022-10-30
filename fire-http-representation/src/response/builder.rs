@@ -2,7 +2,7 @@ use super::Response;
 use crate::body::Body;
 use crate::header::{
 	ResponseHeader, StatusCode, ContentType, HeaderValues, HeaderValue,
-	values::IntoHeaderName
+	values::IntoHeaderName, CONTENT_LENGTH
 };
 
 use std::fmt;
@@ -74,7 +74,7 @@ impl ResponseBuilder {
 		// lets calculate content-length
 		// if the body size is already known
 		if let Some(len) = self.body.len() {
-			self.values_mut().insert("content-length", len);
+			self.values_mut().insert(CONTENT_LENGTH, len);
 		}
 
 		Response::new(self.header, self.body)

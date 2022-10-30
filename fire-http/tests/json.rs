@@ -1,7 +1,7 @@
 
 use fire_http as fire;
 
-use fire::Result;
+use fire::{Result, Request};
 
 use serde::{Serialize, Deserialize};
 
@@ -16,21 +16,19 @@ pub struct JsonData {
 }
 
 
-
 #[tokio::test]
 async fn read_json() {
 	const COMMENT: &str = "Hello, World!";
 
 	// build route
-	fire::post!{ ReadJson, "/",
-		|req| -> Result<String> {
-			let data: JsonData = req.deserialize().await?;
-			Ok(data.comment)
-		}
+	#[fire::post("/")]
+	async fn read_json(req: &mut Request) -> Result<String> {
+		let data: JsonData = req.deserialize().await?;
+		Ok(data.comment)
 	}
 
 	let addr = spawn_server!(|builder| {
-		builder.add_route(ReadJson);
+		builder.add_route(read_json);
 	});
 
 	// now do a request
@@ -55,18 +53,17 @@ async fn read_json() {
 #[tokio::test]
 async fn write_json() {
 	// build route
-	fire::json_get!{ WriteJson, "/",
-		|_r| -> JsonData {
-			JsonData {
-				number: 10,
-				yes: false,
-				comment: "Hello, World!".into()
-			}
+	#[fire::get_json("/")]
+	fn write_json() -> JsonData {
+		JsonData {
+			number: 10,
+			yes: false,
+			comment: "Hello, World!".into()
 		}
-	};
+	}
 
 	let addr = spawn_server!(|builder| {
-		builder.add_route(WriteJson);
+		builder.add_route(write_json);
 	});
 
 	let body = "{\"number\":10,\"yes\":false,\"comment\":\"Hello, World!\"}";

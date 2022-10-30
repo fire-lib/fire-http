@@ -2,5 +2,6 @@
 
 members = [
 	"fire-http",
-	"fire-http-representation"
+	"fire-http-representation",
+	"fire-http-codegen"
 ]

@@ -7,6 +7,8 @@ pub use route::{Route, check_static};
 mod catcher;
 pub use catcher::Catcher;
 
+pub mod util;
+
 use crate::header::{RequestHeader, ResponseHeader};
 
 

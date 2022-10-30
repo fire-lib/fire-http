@@ -1,4 +1,4 @@
-use crate::header::RequestHeader;
+use crate::header::{RequestHeader, CONTENT_TYPE};
 use crate::body::Body;
 
 use std::time::Duration;
@@ -51,7 +51,7 @@ impl Request {
 		// this will not work if content-type has charset
 		// TODO allow charset (probably implement Parse for ContentType)
 		let raw_content_type = self.header()
-			.value("content-type")
+			.value(CONTENT_TYPE)
 			.ok_or(DeserializeError::NoContentType)?;
 		let mime: Mime = raw_content_type.trim().parse()
 			.map_err(|_| DeserializeError::UnknownContentType(

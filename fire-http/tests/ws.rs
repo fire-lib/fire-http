@@ -2,6 +2,7 @@
 use fire_http as fire;
 use fire::Body;
 use fire::ws::{WebSocket, CloseCode, Error};
+use fire::ws;
 
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::protocol::Role;
@@ -62,27 +63,26 @@ async fn build_con() {
 	// handle errors in task
 
 	// // build route
-	fire::ws_route!{ WebSocketRoute, "/",
-		|ws| -> Result<(), Error> {
-			let mut c = 0;
+	#[ws("/")]
+	async fn websocket_route(mut ws: WebSocket) -> Result<(), Error> {
+		let mut c = 0;
 
-			while let Some(msg) = ws.receive().await? {
-				// read
-				assert_eq!(msg.to_text().unwrap(), format!("Hey {}", c));
-				c += 1;
-				// send them
-				ws.send("Hi").await?;
-			}
-
-			println!("connection closed");
-
-			Ok(())
+		while let Some(msg) = ws.receive().await? {
+			// read
+			assert_eq!(msg.to_text().unwrap(), format!("Hey {}", c));
+			c += 1;
+			// send them
+			ws.send("Hi").await?;
 		}
+
+		println!("connection closed");
+
+		Ok(())
 	}
 
 	// builder server
 	let addr = spawn_server!(|builder| {
-		builder.add_raw_route(WebSocketRoute);
+		builder.add_raw_route(websocket_route);
 	});
 
 	// make request

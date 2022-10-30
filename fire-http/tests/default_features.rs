@@ -1,8 +1,10 @@
 
 use fire_http as fire;
 
-use fire::{Response, Body};
-use fire::header::{StatusCode, Mime};
+use fire::{Request, Response, Body, Data, get, post};
+use fire::header::{RequestHeader, ResponseHeader, StatusCode, Mime};
+use fire::routes::Catcher;
+use fire::util::PinnedFuture;
 
 #[macro_use]
 mod util;
@@ -13,12 +15,11 @@ async fn hello_world() {
 	const BODY: &str = "Hello, World!";
 
 	// build route
-	fire::get!(HelloWorld, "/", |_r| -> &'static str {
-		BODY
-	});
+	#[get("/")]
+	fn hello_world() -> &'static str { BODY }
 
 	let addr = spawn_server!(|builder| {
-		builder.add_route(HelloWorld);
+		builder.add_route(hello_world);
 	});
 
 	// now do a request
@@ -27,7 +28,6 @@ async fn hello_world() {
 		.assert_header("content-type", "text/plain; charset=utf-8")
 		.assert_header("content-length", BODY.len().to_string())
 		.assert_body_str(BODY).await;
-
 }
 
 #[tokio::test]
@@ -35,12 +35,13 @@ async fn test_post() {
 	const BODY: &str = "Hello, World!";
 
 	// build route
-	fire::post!(Post, "/", |req| -> Body {
+	#[post("/")]
+	fn post(req: &mut Request) -> Body {
 		req.take_body()
-	});
+	}
 
 	let addr = spawn_server!(|builder| {
-		builder.add_route(Post);
+		builder.add_route(post);
 	});
 
 	// now do a request
@@ -60,19 +61,30 @@ async fn test_post() {
 async fn test_catcher() {
 	const BODY: &str = "Body not Found";
 
-	// build route
-	fire::catcher!(NotFound,
-		|_r, header| {
-			header.status_code() == &StatusCode::NOT_FOUND
-		},
-		|_r, res| -> Response {
-			Response::builder()
-				.status_code(*res.header().status_code())
-				.content_type(Mime::TEXT)
-				.body(BODY)
-				.build()
+	struct NotFound;
+
+	impl Catcher for NotFound {
+		fn check(&self, _req: &RequestHeader, res: &ResponseHeader) -> bool {
+			res.status_code() == &StatusCode::NOT_FOUND
 		}
-	);
+
+		fn call<'a>(
+			&'a self,
+			_req: Request,
+			res: Response,
+			_data: &'a Data
+		) -> PinnedFuture<'a, fire::Result<Response>> {
+			PinnedFuture::new(async move {
+				let resp = Response::builder()
+					.status_code(*res.header().status_code())
+					.content_type(Mime::TEXT)
+					.body(BODY)
+					.build();
+
+				Ok(resp)
+			})
+		}
+	}
 
 	let addr = spawn_server!(|builder| {
 		builder.add_catcher(NotFound);
@@ -100,14 +112,15 @@ async fn anything() {
 	}
 
 	// build route
-	fire::get!(Get, "/", |_r, data: Data| -> Vec<u8> {
+	#[get("/")]
+	fn get(data: &Data) -> Vec<u8> {
 		data.0.clone()
-	});
+	}
 
 	let addr = spawn_server!(
 		|builder| {
 			builder.add_data(Data(data.clone()));
-			builder.add_route(Get);
+			builder.add_route(get);
 		}
 	);
 

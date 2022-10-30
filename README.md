@@ -12,10 +12,9 @@ use fire::get;
 struct GlobalName(String);
 
 // handle a simple get request
-get! { Root, "/",
-	|_r, global_name: GlobalName| -> String {
-		format!("Hi, this is {}", global_name.0)
-	}
+#[get("/")]
+fn root(global_name: &GlobalName) -> String {
+	format!("Hi, this is {}", global_name.0)
 }
 
 #[tokio::main]
@@ -24,7 +23,7 @@ async fn main() {
 		.expect("Failed to parse address");
 
 	server.add_data(GlobalName("fire".into()));
-	server.add_route(Root);
+	server.add_route(root);
 
 	server.light().await.unwrap();
 }

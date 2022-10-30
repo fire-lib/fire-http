@@ -1,7 +1,7 @@
 mod builder;
 pub use builder::ResponseBuilder;
 
-use crate::header::{ResponseHeader, StatusCode};
+use crate::header::{ResponseHeader, StatusCode, Mime};
 use crate::body::Body;
 
 /// The response created from a server.
@@ -37,6 +37,20 @@ impl Response {
 	/// you should probably reset the `content-length` header.
 	pub fn take_body(&mut self) -> Body {
 		self.body.take()
+	}
+
+	pub fn text(body: impl Into<Body>) -> Self {
+		Self::builder()
+			.content_type(Mime::TEXT)
+			.body(body)
+			.build()
+	}
+
+	pub fn html(body: impl Into<Body>) -> Self {
+		Self::builder()
+			.content_type(Mime::HTML)
+			.body(body)
+			.build()
 	}
 }
 

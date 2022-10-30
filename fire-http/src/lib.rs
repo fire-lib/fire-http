@@ -10,6 +10,7 @@ use routes::{Routes, RawRoute, Route, Catcher};
 pub mod util;
 
 pub mod into;
+use into::IntoRoute;
 
 pub mod error;
 pub use error::{Result, Error};
@@ -38,6 +39,8 @@ use tokio::net::ToSocketAddrs;
 
 pub use types;
 pub use types::{Request, Response, Body, header, body};
+
+pub use codegen::*;
 
 /// Prepares a server.
 pub async fn build(addr: impl ToSocketAddrs) -> io::Result<FireBuilder> {
@@ -86,7 +89,8 @@ impl FireBuilder {
 
 	/// Adds a `Route` to the fire.
 	pub fn add_route<R>(&mut self, route: R)
-	where R: Route + 'static {
+	where R: IntoRoute + 'static {
+		let route = route.into_route();
 		route.validate_data(&self.data);
 		self.routes.push(route)
 	}

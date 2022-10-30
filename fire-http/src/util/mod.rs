@@ -1,8 +1,7 @@
-
 use crate::{Request, Response, Body};
 use crate::server::HyperRequest;
 use crate::fire::RequestConfigs;
-use crate::header::ContentType;
+use crate::header::{ContentType, CONTENT_TYPE};
 
 use std::task::Poll;
 use std::pin::Pin;
@@ -14,7 +13,7 @@ use tracing::error;
 
 mod header;
 use header::{convert_hyper_parts_to_fire_header};
-pub use header::HeaderError;
+pub(crate) use header::HeaderError;
 
 use types::body::BodyHttp;
 
@@ -73,7 +72,7 @@ pub(crate) fn convert_fire_resp_to_hyper_resp(
 	let mut header = response.header;
 
 	if !matches!(header.content_type, ContentType::None) {
-		let e = header.values.try_insert("content-type", header.content_type);
+		let e = header.values.try_insert(CONTENT_TYPE, header.content_type);
 		if let Err(e) = e {
 			error!("could not insert content type {:?}", e);
 		}
@@ -92,7 +91,7 @@ pub(crate) fn convert_fire_resp_to_hyper_resp(
 
 #[cfg(debug_assertions)]
 fn validate_content_length(response: &Response) -> Option<()> {
-	let len = response.header().value("content-length")?;
+	let len = response.header().value(crate::header::CONTENT_LENGTH)?;
 
 	let len: usize = len.parse().expect("content-length not a number");
 

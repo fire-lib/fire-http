@@ -1,5 +1,5 @@
 use crate::{Response, Body};
-use crate::header::Mime;
+use crate::header::{Mime, CONTENT_LENGTH};
 use crate::into::IntoResponse;
 
 use std::path::Path;
@@ -54,7 +54,7 @@ impl IntoResponse for File {
 	fn into_response(self) -> Response {
 		Response::builder()
 			.content_type(self.mime_type)
-			.header("content-length", self.size)
+			.header(CONTENT_LENGTH, self.size)
 			.body(Body::from_async_reader(self.file))
 			.build()
 	}

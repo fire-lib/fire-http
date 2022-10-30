@@ -1,7 +1,6 @@
 use fire_http as fire;
 
-use fire::{Result, Response, get, post};
-use fire::header::Mime;
+use fire::{Result, Request, Response, get, post};
 
 use serde::{Serialize, Deserialize};
 
@@ -12,11 +11,9 @@ pub struct MyType {
 	good: String
 }
 
-get!{ HelloWorld, "/",
-	|_r| -> Response {
-		Response::builder()
-			.content_type(Mime::HTML)
-			.body(
+#[get("/")]
+fn hello_world() -> Response {
+	Response::html(
 		"<a id=\"btn\" style=\"color: blue\">Send MyType</a>
 		<script>
 			const myType = {
@@ -31,16 +28,14 @@ get!{ HelloWorld, "/",
 				}).then(r => r.text());
 				alert(`response: ${ await res }`);
 			});
-		</script>" )
-			.build()
-	}
+		</script>"
+	)
 }
 
-post!{ HelloWorldJson, "/",
-	|req| -> Result<String> {
-		let my_type: MyType = req.deserialize().await?;
-		Ok(format!("read type {:?}", my_type))
-	}
+#[post("/")]
+async fn hello_world_json(req: &mut Request) -> Result<String> {
+	let my_type: MyType = req.deserialize().await?;
+	Ok(format!("read type {:?}", my_type))
 }
 
 #[tokio::main]
@@ -48,8 +43,8 @@ async fn main() {
 	let mut server = fire::build("0.0.0.0:3000").await
 		.expect("Address could not be parsed");
 
-	server.add_route( HelloWorld );
-	server.add_route( HelloWorldJson );
+	server.add_route(hello_world);
+	server.add_route(hello_world_json);
 
 	server.light().await.unwrap();
 }

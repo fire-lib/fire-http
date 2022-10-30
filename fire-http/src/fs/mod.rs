@@ -17,11 +17,11 @@ pub use file::File;
 mod partial_file;
 pub use partial_file::{PartialFile, Range};
 
-pub mod caching;
+mod caching;
 pub use caching::Caching;
 
-pub mod static_files;
-pub use static_files::{StaticFilesRoute, StaticFileRoute, serve_file};
+mod static_files;
+pub use static_files::{StaticFiles, StaticFile, serve_file};
 
 /// returns io::Error not found if the path is a directory
 pub async fn with_file<P>(path: P) -> io::Result<Response>
@@ -35,29 +35,6 @@ pub async fn with_partial_file<P>(path: P, range: Range) -> io::Result<Response>
 where P: AsRef<Path> {
 	PartialFile::open(path, range).await
 		.map(|pf| pf.into_response())
-}
-
-/// Static get handler which servers/returns a file.
-/// 
-/// ## Example
-/// ```
-/// # use fire_http as fire;
-/// use fire::get_with_file;
-/// 
-/// type Data = ();
-/// 
-/// get_with_file! { Index, "/" => "./www/index.html" }
-/// ```
-#[macro_export]
-macro_rules! get_with_file {
-	($name:ident, $uri:expr => $path:expr) => (
-		$crate::get!{ $name, $uri,
-			|_r| -> $crate::Result<$crate::Response> {
-				$crate::fs::with_file($path).await
-					.map_err($crate::Error::from_client_io)
-			}
-		}
-	)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

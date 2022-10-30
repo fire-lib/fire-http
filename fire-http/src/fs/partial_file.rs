@@ -1,13 +1,16 @@
 use crate::{Response, Body};
 use crate::into::IntoResponse;
-use crate::header::{RequestHeader, StatusCode, Mime};
+use crate::header::{
+	RequestHeader, StatusCode, Mime,
+	RANGE, ACCEPT_RANGES, CONTENT_LENGTH, CONTENT_RANGE
+};
 
 use std::fmt;
 use std::path::Path;
 use std::convert::AsRef;
 use std::io::SeekFrom;
 use std::pin::Pin;
-use std::task::{ Context, Poll };
+use std::task::{Context, Poll};
 use std::convert::TryInto;
 
 use tokio::{io, fs};
@@ -22,7 +25,7 @@ pub struct Range {
 
 impl Range {
 	pub fn parse(header: &RequestHeader) -> Option<Self> {
-		let range = header.value("range")?;
+		let range = header.value(RANGE)?;
 		if !range.starts_with("bytes=") {
 			return None
 		}
@@ -175,10 +178,10 @@ impl IntoResponse for PartialFile {
 		let response = Response::builder()
 			.status_code(StatusCode::PARTIAL_CONTENT)
 			.content_type(self.mime_type)
-			.header("accept-ranges", "bytes")
-			.header("content-length", len)
+			.header(ACCEPT_RANGES, "bytes")
+			.header(CONTENT_LENGTH, len)
 			.header(
-				"content-range",
+				CONTENT_RANGE,
 				format!("bytes {}-{}/{}", self.start, self.end, self.size)
 			);
 

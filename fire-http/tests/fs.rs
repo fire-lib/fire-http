@@ -1,5 +1,6 @@
 use fire_http as fire;
 use fire::Body;
+use fire::fs::StaticFiles;
 
 #[macro_use]
 mod util;
@@ -8,10 +9,10 @@ mod util;
 #[tokio::test]
 async fn read_file() {
 	// build route
-	fire::static_files!{ Css, "/css" => "./examples/www/css" }
+	const CSS: StaticFiles = StaticFiles::new("/css", "./examples/www/css");
 
 	let addr = spawn_server!(|builder| {
-		builder.add_route(Css::cache_always());
+		builder.add_route(CSS);
 	});
 
 	make_request!("GET", addr, "/css").await
