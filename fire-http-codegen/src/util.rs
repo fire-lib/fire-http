@@ -29,6 +29,7 @@ pub(crate) fn validate_signature(sig: &Signature) -> Result<()> {
 	Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) fn ref_type(ty: &Type) -> Option<&TypeReference> {
 	match ty {
 		Type::Reference(r) => Some(r),
@@ -36,6 +37,7 @@ pub(crate) fn ref_type(ty: &Type) -> Option<&TypeReference> {
 	}
 }
 
+#[allow(dead_code)]
 pub(crate) fn validate_inputs_ref_or_owned(
 	inputs: punctuated::Iter<'_, FnArg>
 ) -> Result<Vec<Box<Type>>> {

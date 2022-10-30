@@ -1,4 +1,6 @@
-use crate::header::{RequestHeader, CONTENT_TYPE};
+use crate::header::RequestHeader;
+#[cfg(feature = "json")]
+use crate::header::CONTENT_TYPE;
 use crate::body::Body;
 
 use std::time::Duration;
