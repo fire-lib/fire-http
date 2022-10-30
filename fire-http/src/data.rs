@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 use std::any::{Any, TypeId};
+use std::sync::Arc;
 
-
+#[derive(Clone)]
 pub struct Data {
-	inner: HashMap<TypeId, Box<dyn Any + Send + Sync>>
+	inner: Arc<HashMap<TypeId, Box<dyn Any + Send + Sync>>>
 }
 
 impl Data {
 	pub(crate) fn new() -> Self {
 		Self {
-			inner: HashMap::new()
+			inner: Arc::new(HashMap::new())
 		}
 	}
 
@@ -21,7 +22,8 @@ impl Data {
 	/// returns true if the data already existed
 	pub(crate) fn insert<D>(&mut self, data: D) -> bool
 	where D: Any + Send + Sync {
-		self.inner.insert(data.type_id(), Box::new(data)).is_some()
+		let map = Arc::get_mut(&mut self.inner).unwrap();
+		map.insert(data.type_id(), Box::new(data)).is_some()
 	}
 
 	pub fn get<D>(&self) -> Option<&D>

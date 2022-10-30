@@ -2,8 +2,12 @@ mod route;
 mod args;
 #[cfg(feature = "ws")]
 mod ws;
+#[cfg(feature = "api")]
+mod api;
 
 use args::Args;
+#[cfg(feature = "api")]
+use args::ApiArgs;
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -89,6 +93,19 @@ pub fn ws(attrs: TokenStream, item: TokenStream) -> TokenStream {
 	let item = parse_macro_input!(item as ItemFn);
 
 	let stream = ws::expand(args, item);
+
+	stream
+		.map(|stream| stream.into())
+		.unwrap_or_else(to_compile_error)
+}
+
+#[proc_macro_attribute]
+#[cfg(feature = "api")]
+pub fn api(attrs: TokenStream, item: TokenStream) -> TokenStream {
+	let args = parse_macro_input!(attrs as ApiArgs);
+	let item = parse_macro_input!(item as ItemFn);
+
+	let stream = api::expand(args, item);
 
 	stream
 		.map(|stream| stream.into())

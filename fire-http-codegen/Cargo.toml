@@ -10,9 +10,14 @@ proc_macro = true
 name = "ws_route"
 required-features = ["ws"]
 
+[[test]]
+name = "api_route"
+required-features = ["api"]
+
 [features]
 json = []
 ws = []
+api = []
 
 [dependencies]
 proc-macro2 = "1.0"
@@ -22,3 +27,5 @@ proc-macro-crate = "1.2"
 
 [dev-dependencies]
 fire = { package = "fire-http", version = "0.3.0-rc.1", path = "../fire-http", features = ["ws", "json"] }
+fire-api = { package = "fire-http-api", version = "0.2.0-rc.1", path = "../fire-http-api" }
+serde = { version = "1.0", features = ["derive"] }
