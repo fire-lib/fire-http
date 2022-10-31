@@ -20,7 +20,9 @@ macro_rules! spawn_server {
 		let socket_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 0);
 		let mut $builder = fire::build(socket_addr).await.unwrap();
 		let _ = $block;
-		let (addr, _) = $builder.test_light().await;
+		let fire = $builder.build().await.unwrap();
+		let addr = fire.local_addr().unwrap();
+		tokio::task::spawn(fire.ignite());
 
 		addr
 	})

@@ -1,4 +1,3 @@
-[![CI](https://github.com/fire-lib/fire-http-api/actions/workflows/ci.yaml/badge.svg)](https://github.com/fire-lib/fire-http-api/actions/workflows/ci.yaml)
 [![crates.io](https://img.shields.io/crates/v/fire-http-api)](https://crates.io/crates/fire-http-api)
 [![docs.rs](https://img.shields.io/docsrs/fire-http-api)](https://docs.rs/fire-http-api)
 
@@ -114,7 +113,6 @@ async fn main() {
 	server.add_route(get_name);
 	server.add_route(set_name);
 
-	server.light().await
-		.expect("server paniced");
+	server.ignite().await.unwrap();
 }
 ```

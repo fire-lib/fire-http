@@ -16,9 +16,10 @@ pub mod error;
 pub use error::{Result, Error};
 
 mod server;
+use server::Server;
 
 mod fire;
-use fire::RequestConfigs;
+use fire::{RequestConfigs, Wood};
 
 #[cfg(feature = "fs")]
 pub mod fs;
@@ -33,8 +34,8 @@ use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
 use std::any::Any;
+use std::sync::Arc;
 
-use tokio::task;
 use tokio::net::ToSocketAddrs;
 
 pub use types;
@@ -124,37 +125,75 @@ impl FireBuilder {
 		self.show_startup_msg = false;
 	}
 
-	/// Lights the fire, which starts the server.
+	/// Binds to the address and prepares to serve requests.
+	/// 
+	/// You need to call ignite on the `Fire` so that it starts handling
+	/// requests.
+	pub async fn build(self) -> Result<Fire> {
+		let wood = Arc::new(Wood::new(self.data, self.routes, self.configs));
+
+		let server = Server::bind(self.addr, wood.clone()).await
+			.map_err(Error::from_server_error)?;
+
+		Ok(Fire {
+			wood, server,
+			show_startup_msg: self.show_startup_msg
+		})
+	}
+
+	/// Ignites the fire, which starts the server.
 	/// 
 	/// ## Note
 	/// Under normal conditions this function should run forever.
-	pub async fn light(self) -> Result<()> {
+	pub async fn ignite(self) -> Result<()> {
+		let fire = self.build().await?;
+		fire.ignite().await
+	}
 
+}
+
+/// A Fire that is ready to be ignited.
+pub struct Fire {
+	wood: Arc<Wood>,
+	server: Server,
+	show_startup_msg: bool
+}
+
+impl Fire {
+	pub fn local_addr(&self) -> Option<SocketAddr> {
+		self.server.local_addr().ok()
+	}
+
+	pub fn pit(&self) -> FirePit {
+		FirePit { wood: self.wood.clone() }
+	}
+
+	pub async fn ignite(self) -> Result<()> {
 		if self.show_startup_msg {
-			println!("Running server on addr: {}", self.addr);
+			eprintln!("Running server on addr: {}", self.local_addr().unwrap());
 		}
 
-		let wood = fire::Wood::new(self.data, self.routes, self.configs);
-
-		let server = server::Server::bind(self.addr, wood).await
-			.map_err(Error::from_server_error)?;
-
-		server.serve().await
+		self.server.serve().await
 			.map_err(Error::from_server_error)
 	}
+}
 
-	#[doc(hidden)]
-	pub async fn test_light(self) -> (SocketAddr, task::JoinHandle<()>) {
-		let wood = fire::Wood::new(self.data, self.routes, self.configs);
+#[derive(Clone)]
+pub struct FirePit {
+	wood: Arc<Wood>
+}
 
-		let server = server::Server::bind(self.addr, wood).await.unwrap();
-
-		let addr = server.local_addr().unwrap();
-		let task = tokio::spawn(async move {
-			server.serve().await.expect("test server failed");
-		});
-
-		(addr, task)
+impl FirePit {
+	pub fn data(&self) -> &Data {
+		self.wood.data()
 	}
 
+	/// Routes the request to normal routes and returns their result.
+	/// 
+	/// Useful for tests and niche applications.
+	/// 
+	/// Returns None if no route was found matching the request.
+	pub async fn route(&self, req: &mut Request) -> Option<Result<Response>> {
+		fire::route(&self.wood, req).await
+	}
 }

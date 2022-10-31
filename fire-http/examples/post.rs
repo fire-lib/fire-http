@@ -56,7 +56,6 @@ async fn main() {
 	server.add_route(hello_world);
 	server.add_route(hello_world_post);
 
-	server.light().await
-		.unwrap();
+	server.ignite().await.unwrap();
 	
 }

@@ -46,5 +46,5 @@ async fn main() {
 	server.add_route(hello_world);
 	server.add_catcher(Error404Handler);
 
-	server.light().await.unwrap();
+	server.ignite().await.unwrap();
 }

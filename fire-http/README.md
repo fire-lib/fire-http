@@ -21,7 +21,7 @@ async fn main() {
 	server.add_data(GlobalName("fire".into()));
 	server.add_route(root);
 
-	server.light().await.unwrap();
+	server.ignite().await.unwrap();
 }
 ```
 

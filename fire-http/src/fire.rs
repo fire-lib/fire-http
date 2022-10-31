@@ -1,11 +1,10 @@
-use crate::Data;
+use crate::{Data, Request, Error};
 use crate::server::HyperRequest;
 use crate::util::{
 	convert_hyper_req_to_fire_req, convert_fire_resp_to_hyper_resp
 };
 use crate::routes::Routes;
 
-use std::sync::Arc;
 use std::net::SocketAddr;
 use std::convert::Infallible;
 use std::time::Duration;
@@ -20,9 +19,8 @@ const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 // same as page size
 const DEFAULT_REQUEST_SIZE_LIMIT: usize = 4096;// 4kb
 
-
 #[derive(Debug)]
-pub struct RequestConfigs {
+pub(crate) struct RequestConfigs {
 	pub timeout: Duration,
 	// in bytes
 	pub size_limit: usize
@@ -49,7 +47,7 @@ impl RequestConfigs {
 }
 
 // IncredientsForAFire
-pub struct Wood {
+pub(crate) struct Wood {
 	data: Data,
 	routes: Routes,
 	configs: RequestConfigs
@@ -73,18 +71,18 @@ impl Wood {
 	}
 }
 
-pub async fn new_spark(
-	wood: Arc<Wood>,
+pub(crate) async fn route_hyper(
+	wood: &Wood,
 	hyper_req: HyperRequest,
 	address: SocketAddr
 ) -> Result<hyper::Response<BodyHttp>, Infallible> {
-	let route_resp = route(wood, hyper_req, address).await;
+	let route_resp = route_hyper_req(wood, hyper_req, address).await;
 	let hyper_resp = convert_fire_resp_to_hyper_resp(route_resp);
 	Ok(hyper_resp)
 }
 
-pub async fn route(
-	wood: Arc<Wood>,
+pub(crate) async fn route_hyper_req(
+	wood: &Wood,
 	mut hyper_req: HyperRequest,
 	address: SocketAddr
 ) -> Response {
@@ -124,22 +122,15 @@ pub async fn route(
 	let resp = if let Some(r) = resp {
 		r
 	} else {
-		// first response
-		match wood.routes().route(req.header()) {
-			Some(route) => {
-				let result = route.call(&mut req, wood.data()).await;
-				// is Ok(Response)
-				match result {
-					Ok(res) => res,
-					Err(e) => {
-						error!(
-							"Route error: {:?} {:?}",
-							req.header().uri().path(),
-							e
-						);
-						e.status_code().into()
-					}
-				}
+		match route(wood, &mut req).await {
+			Some(Ok(resp)) => resp,
+			Some(Err(e)) => {
+				error!(
+					"Route error: {:?} {:?}",
+					req.header().uri().path(),
+					e
+				);
+				e.status_code().into()
 			},
 			None => StatusCode::NOT_FOUND.into()
 		}
@@ -161,4 +152,15 @@ pub async fn route(
 	trace!("Response {:?}", resp);
 
 	resp
+}
+
+pub(crate) async fn route(
+	wood: &Wood,
+	req: &mut Request
+) -> Option<Result<Response, Error>> {
+	// first response
+	let r = wood.routes().route(req.header())?
+		.call(req, wood.data()).await;
+
+	Some(r)
 }

@@ -54,7 +54,6 @@ async fn test_post() {
 		// we don't know how big it is
 		.assert_not_header("content-length")
 		.assert_body_str(BODY).await;
-
 }
 
 #[tokio::test]
@@ -98,7 +97,6 @@ async fn test_catcher() {
 		.assert_header("content-type", "text/plain; charset=utf-8")
 		.assert_header("content-length", BODY.len().to_string())
 		.assert_body_str(BODY).await;
-
 }
 
 #[tokio::test]
@@ -132,5 +130,4 @@ async fn anything() {
 		.assert_header("content-type", "application/octet-stream")
 		.assert_header("content-length", data.len().to_string())
 		.assert_body_vec(&data).await;
-
 }

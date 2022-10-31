@@ -12,5 +12,5 @@ async fn main() {
 
 	server.add_route(HELLO_WORLD);
 
-	server.light().await.unwrap();
+	server.ignite().await.unwrap();
 }

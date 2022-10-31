@@ -19,16 +19,17 @@ use hyper::server::conn::http1;
 pub type HyperRequest = hyper::Request<Incoming>;
 
 // todo replace this function once hyper-util is ready
-pub(crate) struct Server {
+pub struct Server {
 	listener: TcpListener,
 	wood: Arc<Wood>
 }
 
 impl Server {
-	pub async fn bind(addr: SocketAddr, wood: Wood) -> io::Result<Self> {
+	pub(crate) async fn bind(
+		addr: SocketAddr,
+		wood: Arc<Wood>
+	) -> io::Result<Self> {
 		let listener = TcpListener::bind(addr).await?;
-		let wood = Arc::new(wood);
-
 		Ok(Self { listener, wood })
 	}
 
@@ -58,7 +59,7 @@ impl Server {
 	}
 }
 
-pub struct FireService {
+pub(crate) struct FireService {
 	wood: Arc<Wood>,
 	address: SocketAddr
 }
@@ -69,6 +70,10 @@ impl Service<HyperRequest> for FireService {
 	type Future = PinnedFuture<'static, Result<Self::Response, Self::Error>>;
 
 	fn call(&mut self, req: HyperRequest) -> Self::Future {
-		PinnedFuture::new(fire::new_spark(self.wood.clone(), req, self.address))
+		let wood = self.wood.clone();
+		let address = self.address;
+		PinnedFuture::new(async move {
+			fire::route_hyper(&wood, req, address).await
+		})
 	}
 }

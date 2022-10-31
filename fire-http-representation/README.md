@@ -1,4 +1,3 @@
-[![CI](https://github.com/fire-lib/fire-http-representation/actions/workflows/ci.yaml/badge.svg)](https://github.com/fire-lib/fire-http-representation/actions/workflows/ci.yaml)
 [![crates.io](https://img.shields.io/crates/v/fire-http-representation)](https://crates.io/crates/fire-http-representation)
 [![docs.rs](https://img.shields.io/docsrs/fire-http-representation)](https://docs.rs/fire-http-representation)
 

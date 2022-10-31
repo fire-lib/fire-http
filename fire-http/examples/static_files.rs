@@ -11,6 +11,6 @@ async fn main() {
 
 	server.add_route(CSS);
 
-	server.light().await.unwrap();
+	server.ignite().await.unwrap();
 	
 }
