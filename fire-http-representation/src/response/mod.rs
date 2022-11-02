@@ -14,7 +14,6 @@ pub struct Response {
 }
 
 impl Response {
-
 	/// Creates a new `Response`.
 	pub fn new(header: ResponseHeader, body: Body) -> Self {
 		Self { header, body }
