@@ -185,6 +185,7 @@ impl WebSocket {
 
 	/// calls receive and then deserialize
 	#[cfg(feature = "json")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
 	pub async fn deserialize<D>(&mut self) -> Result<Option<D>, JsonError>
 	where D: serde::de::DeserializeOwned {
 		let msg = try2!(self.receive().await?).into_data();
@@ -195,6 +196,7 @@ impl WebSocket {
 
 	/// calls serialize then send
 	#[cfg(feature = "json")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
 	pub async fn serialize<S: ?Sized>(&mut self, value: &S) -> Result<(), JsonError>
 	where S: serde::Serialize {
 		let v = serde_json::to_string(value)?;
@@ -210,6 +212,7 @@ mod json_error {
 	use super::Error;
 	use std::fmt;
 
+	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
 	#[derive(Debug)]
 	pub enum JsonError {
 		ConnectionError(Error),
