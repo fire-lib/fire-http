@@ -69,18 +69,18 @@ async fn test_catcher() {
 
 		fn call<'a>(
 			&'a self,
-			_req: Request,
-			res: Response,
+			_req: &'a mut Request,
+			resp: &'a mut Response,
 			_data: &'a Data
-		) -> PinnedFuture<'a, fire::Result<Response>> {
+		) -> PinnedFuture<'a, fire::Result<()>> {
 			PinnedFuture::new(async move {
-				let resp = Response::builder()
-					.status_code(*res.header().status_code())
+				*resp = Response::builder()
+					.status_code(StatusCode::NOT_FOUND)
 					.content_type(Mime::TEXT)
 					.body(BODY)
 					.build();
 
-				Ok(resp)
+				Ok(())
 			})
 		}
 	}

@@ -19,20 +19,20 @@ impl Catcher for Error404Handler {
 
 	fn call<'a>(
 		&'a self,
-		req: Request,
-		mut res: Response,
+		req: &'a mut Request,
+		resp: &'a mut Response,
 		_data: &'a Data
-	) -> PinnedFuture<'a, Result<Response>> {
+	) -> PinnedFuture<'a, Result<()>> {
 		PinnedFuture::new(async move {
 			let path = req.header().uri().path();
 			let method = req.header().method();
-			res.body = format!(
+			resp.body = format!(
 				"Error 404: Page \"{}\" With Method \"{}\" Not Found",
 				path,
 				method
 			).into();
 
-			Ok(res)
+			Ok(())
 		})
 	}
 }

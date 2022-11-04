@@ -119,7 +119,7 @@ pub(crate) async fn route_hyper_req(
 	};
 
 	// normal route
-	let resp = if let Some(r) = resp {
+	let mut resp = if let Some(r) = resp {
 		r
 	} else {
 		match route(wood, &mut req).await {
@@ -139,15 +139,15 @@ pub(crate) async fn route_hyper_req(
 	// APPLY OVERRIDES
 
 	// check with catcher
-	let req_header = req.header();
-	let res_header = resp.header();
-	let resp = match wood.routes().route_catcher(req_header, res_header) {
-		Some(route) => {
-			route.call(req, resp, wood.data()).await
-				.unwrap_or_else(|e| e.status_code().into())
-		},
-		None => resp
-	};
+	for catcher in wood.routes().catchers() {
+		if !catcher.check(req.header(), resp.header()) {
+			continue
+		}
+
+		if let Err(e) = catcher.call(&mut req, &mut resp, wood.data()).await {
+			resp = e.status_code().into();
+		}
+	}
 
 	trace!("Response {:?}", resp);
 

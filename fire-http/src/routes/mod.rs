@@ -9,7 +9,9 @@ pub use catcher::Catcher;
 
 pub mod util;
 
-use crate::header::{RequestHeader, ResponseHeader};
+use crate::header::RequestHeader;
+
+use std::slice;
 
 
 type BoxedRawRoute = Box<dyn RawRoute>;
@@ -25,7 +27,6 @@ pub struct Routes {
 }
 
 impl Routes {
-
 	pub fn new() -> Self {
 		Self{
 			raw: vec![],
@@ -73,17 +74,7 @@ impl Routes {
 		None
 	}
 
-	pub fn route_catcher(
-		&self,
-		request_header: &RequestHeader,
-		response_header: &ResponseHeader
-	) -> Option<&BoxedCatcher> {
-		for catcher in &self.catcher {
-			if catcher.check(request_header, response_header) {
-				return Some(catcher)
-			}
-		}
-		None
+	pub fn catchers(&self) -> slice::Iter<'_, BoxedCatcher> {
+		self.catcher.iter()
 	}
-
 }

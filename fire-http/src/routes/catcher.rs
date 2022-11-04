@@ -11,8 +11,8 @@ pub trait Catcher: Send +  Sync {
 
 	fn call<'a>(
 		&'a self,
-		req: Request,
-		res: Response,
+		req: &'a mut Request,
+		resp: &'a mut Response,
 		data: &'a Data
-	) -> PinnedFuture<'a, crate::Result<Response>>;
+	) -> PinnedFuture<'a, crate::Result<()>>;
 }
