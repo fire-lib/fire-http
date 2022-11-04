@@ -7,6 +7,8 @@ use std::convert::AsRef;
 
 use tokio::{io, fs};
 
+use bytes::Bytes;
+
 
 pub struct File {
 	file: fs::File,
@@ -58,4 +60,21 @@ impl IntoResponse for File {
 			.body(Body::from_async_reader(self.file))
 			.build()
 	}
+}
+
+pub fn serve_memory_file(
+	path: &'static str,
+	bytes: &'static [u8]
+) -> io::Result<Response> {
+	let mime_type = path.rsplit('.').next()
+		.and_then(Mime::from_extension)
+		.unwrap_or(Mime::BINARY);
+
+	let response = Response::builder()
+		.content_type(mime_type)
+		.header(CONTENT_LENGTH, bytes.len())
+		.body(Bytes::from_static(bytes))
+		.build();
+
+	Ok(response)
 }

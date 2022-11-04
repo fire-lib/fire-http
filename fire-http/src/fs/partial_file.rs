@@ -16,6 +16,8 @@ use std::convert::TryInto;
 use tokio::{io, fs};
 use io::AsyncSeekExt;
 
+use bytes::Bytes;
+
 
 #[derive(Debug, Clone)]
 pub struct Range {
@@ -45,6 +47,43 @@ impl Range {
 		Some(Self { start, end })
 	}
 }
+
+
+pub fn serve_memory_partial_file(
+	path: &'static str,
+	bytes: &'static [u8],
+	range: Range
+) -> io::Result<Response> {
+	let mime_type = path.rsplit('.').next()
+		.and_then(Mime::from_extension)
+		.unwrap_or(Mime::BINARY);
+
+	let size = bytes.len();
+	let start = range.start;
+	let end = range.end.unwrap_or(size - 1);
+
+	if end >= size || start >= end {
+		return Err(io::Error::new(
+			io::ErrorKind::Other,
+			RangeIncorrect(range)
+		))
+	}
+
+	let len = (end + 1) - start;
+
+	let response = Response::builder()
+		.status_code(StatusCode::PARTIAL_CONTENT)
+		.content_type(mime_type)
+		.header(ACCEPT_RANGES, "bytes")
+		.header(CONTENT_LENGTH, len)
+		.header(CONTENT_RANGE, format!("bytes {}-{}/{}", start, end, size))
+		.body(Bytes::from_static(&bytes[start..=end]))
+		.build();
+
+	Ok(response)
+}
+
+
 
 pub struct PartialFile {
 	file: fs::File,

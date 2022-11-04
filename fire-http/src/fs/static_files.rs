@@ -12,7 +12,6 @@ use std::path::Path;
 use std::time::Duration;
 use std::io;
 
-
 /// returns io::Error not found if the path is a directory
 pub async fn serve_file(
 	path: impl AsRef<Path>,
@@ -51,7 +50,7 @@ pub async fn serve_file(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CachingBuilder {
+pub(super) enum CachingBuilder {
 	None,
 	Default,
 	MaxAge(Duration)

@@ -1,7 +1,7 @@
-use crate::{Response, Body};
+use crate::Response;
 use crate::into::IntoResponse;
 
-use tokio::{io, fs};
+use tokio::io;
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -23,15 +23,55 @@ pub use caching::Caching;
 mod static_files;
 pub use static_files::{StaticFiles, StaticFile, serve_file};
 
+mod memory_files;
+pub use memory_files::{serve_memory_file, MemoryFile};
+
+
+/// Static get handler which servers/returns a file which gets loaded into
+/// the binary at compile time.
+/// 
+/// ## Example
+/// ```
+/// # use fire_http as fire;
+/// use std::time::Duration;
+/// use fire::fs::MemoryFile;
+/// use fire::memory_file;
+///
+/// const INDEX: MemoryFile = memory_file!(
+/// 	"/",
+/// 	"../../examples/www/hello_world.html"
+/// );
+/// 
+/// const INDEX_WITH_CACHE: MemoryFile = memory_file!(
+/// 	"/",
+/// 	"../../examples/www/hello_world.html",
+/// 	Duration::from_secs(10)
+/// );
+/// ```
+#[macro_export]
+macro_rules! memory_file {
+	($uri:expr, $path:expr) => (
+		$crate::fs::MemoryFile::new($uri, $path, include_bytes!($path))
+	);
+	($uri:expr, $path:expr, $duration:expr) => (
+		$crate::fs::MemoryFile::cache_with_age(
+			$uri,
+			$path,
+			include_bytes!($path),
+			$duration
+		)
+	)
+}
+
 /// returns io::Error not found if the path is a directory
-pub async fn with_file<P>(path: P) -> io::Result<Response>
+pub(crate) async fn with_file<P>(path: P) -> io::Result<Response>
 where P: AsRef<Path> {
 	File::open(path).await
 		.map(|f| f.into_response())
 }
 
 /// returns io::Error not found if the path is a directory
-pub async fn with_partial_file<P>(path: P, range: Range) -> io::Result<Response>
+pub(crate) async fn with_partial_file<P>(path: P, range: Range) -> io::Result<Response>
 where P: AsRef<Path> {
 	PartialFile::open(path, range).await
 		.map(|pf| pf.into_response())
@@ -97,21 +137,4 @@ impl IntoPathBuf for &str {
 
 		Ok(path_buf)
 	}
-}
-
-
-// TODO maybe return crate::Result
-// because file::create should be a server Error
-pub async fn write_body_to_file<P>(
-	body: Body,
-	path: P
-) -> io::Result<()>
-where P: AsRef<Path> {
-	let mut file = fs::File::create(path).await?;
-	let reader = body.into_async_reader();
-	tokio::pin!(reader);
-
-	// body.copy_to_async_write(&mut file).await
-	io::copy(&mut reader, &mut file).await
-		.map(|_| ())
 }

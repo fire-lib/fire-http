@@ -54,21 +54,48 @@ impl PartialEq<&str> for Etag {
 }
 
 
-// max-age
-// 
+/// Controls if caching information should be sent.
+/// 
+/// The Caching struct contains an Etag which stores a random tag which
+/// indentifies a specific file. The Etag gets generated when the struct gets
+/// created.
+/// 
+/// ## Example
+/// ```ignore
+/// # use fire_http as fire;
+/// use fire::{get, Request};
+/// use fire::fs::Caching;
+/// use fire::into::IntoResponse;
+/// use std::cell::LazyCell;
+/// 
+/// 
+/// const INDEX_CACHE: LazyCell<Caching> = LazyCell::new(|| {
+/// 	Caching::default()
+/// });
+/// 
+/// #[get("/")]
+/// fn index(req: &mut Request) -> Response {
+/// 	let cache = INDEX_CACHE.clone();
+/// 	if cache.if_none_match(req.header()) {
+/// 		return cache.into_response()
+/// 	}
+/// 
+/// 	let mut resp = Response::html("<h1>Hello, World!</h1>");
+/// 	cache.complete_header(&mut resp.header);
+/// 	
+/// 	resp
+/// }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Caching {
 	max_age: Duration,
 	etag: Etag
-	// only_if_status_ok: bool
 }
 
 impl Caching {
 	pub fn new(max_age: Duration) -> Self {
 		Self {
 			max_age,
-			etag: Etag::new(),
-			// only_if_status_ok: false
+			etag: Etag::new()
 		}
 	}
 
@@ -86,17 +113,11 @@ impl Caching {
 			.unwrap_or(false)
 	}
 
-	pub fn cache_control_string(&self) -> String {
+	fn cache_control_string(&self) -> String {
 		format!("max-age={}, public", self.max_age.as_secs())
 	}
 
 	pub fn complete_header(self, header: &mut ResponseHeader) {
-		// if self.only_if_status_ok {
-		// 	if &header.status_code != &StatusCode::Ok { // only if status ok
-		// 		return
-		// 	}
-		// }
-
 		header.values.insert(CACHE_CONTROL, self.cache_control_string());
 
 		// etag makes only sense with files not 404
