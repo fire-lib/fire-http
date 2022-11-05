@@ -232,7 +232,7 @@ pub fn get_route_data_as_owned<T: Any, R: Any>(
 	}
 }
 
-/// Safety you need to know that T is `WebSocket`
+/// Safety you need to know that T is `R`
 unsafe fn transform_owned<T: Any + Sized, R: Any>(from: R) -> T {
 	let mut from = ManuallyDrop::new(from);
 	(&mut from as *mut ManuallyDrop<R> as *mut T).read()
