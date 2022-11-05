@@ -55,7 +55,11 @@ impl Request for NameReq {
 }
 
 #[fire::api(NameReq)]
-fn get_name(_: NameReq) -> Result<Name, Error> {
+fn get_name(
+	_req: NameReq,
+	_some_data: &Name,
+	_more_data: &NameReq
+) -> Result<Name, Error> {
 	Ok(Name {
 		firstname: "Albert".into(),
 		lastname: "Einstein".into()

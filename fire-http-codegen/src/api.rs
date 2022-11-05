@@ -110,7 +110,7 @@ pub(crate) fn expand(
 			};
 
 			handler_args.push(quote!(
-				#get_fn(data, &header, &mut req)
+				#get_fn(data, &header, &req)
 			));
 		}
 
@@ -135,7 +135,7 @@ pub(crate) fn expand(
 						fire_req
 					).await?;
 
-					let mut req = Some(req);
+					let req = #fire_api::util::RequestHolder::new(req);
 					let header = fire_req.header();
 
 					let resp: __Response = handler(

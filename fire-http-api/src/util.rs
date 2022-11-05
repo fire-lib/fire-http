@@ -4,6 +4,7 @@ use crate::ApiError;
 use std::time::Duration;
 use std::any::{Any, TypeId};
 use std::mem::ManuallyDrop;
+use std::cell::Cell;
 
 use tracing::error;
 
@@ -114,14 +115,97 @@ pub fn valid_route_data_as_owned<T: Any, R: Any>(_data: &Data) -> bool {
 	is_req::<T, R>()
 }
 
+#[doc(hidden)]
+pub struct RequestHolder<T> {
+	inner: Cell<ReqHolder<T>>
+}
+
+impl<T> RequestHolder<T> {
+	pub fn new(val: T) -> Self {
+		Self {
+			inner: Cell::new(ReqHolder::Val { was_shared: false, val })
+		}
+	}
+
+	/// ## Panics
+	/// if the value is already taken or taken as a reference
+	#[inline]
+	pub fn take(&self) -> T {
+		// This is always safe since no one has mutable access to the values
+		let inner = unsafe { &*self.inner.as_ptr() };
+
+		if !matches!(inner, ReqHolder::Val { was_shared: false, .. }) {
+			panic!("request already taken or used as reference");
+		}
+
+		// drop the reference since we wan't to replace its value
+		drop(inner);
+		match self.inner.replace(ReqHolder::Taken) {
+			ReqHolder::Val { was_shared: false, val } => val,
+			_ => unreachable!()
+		}
+	}
+
+	/// ## Panics
+	/// If the values is already taken
+	#[inline]
+	pub fn as_ref(&self) -> &T {
+		{
+			// This is always safe since no one has mutable access to the values
+			let inner = unsafe { &*self.inner.as_ptr() };
+
+			match inner {
+				ReqHolder::Val { was_shared: false, .. } => {},
+				ReqHolder::Val { was_shared: true, val } => return val,
+				ReqHolder::Taken => panic!("request already taken")
+			}
+		}
+
+		// the value is currently marked as owned
+		{
+			// This is safe since no one has access to inner at the moment
+			// exept us
+			let inner_mut = unsafe { &mut *self.inner.as_ptr() };
+
+			if let ReqHolder::Val { was_shared, .. } = inner_mut {
+				*was_shared = true;
+			}
+		}
+
+		// This is always safe since no one has mutable access to the values
+		let inner = unsafe { &*self.inner.as_ptr() };
+		inner.as_ref()
+	}
+}
+
+enum ReqHolder<T> {
+	Val {
+		was_shared: bool,
+		val: T
+	},
+	Taken
+}
+
+impl<T> ReqHolder<T> {
+	/// ## Panics
+	/// if req was not shared
+	#[inline]
+	fn as_ref(&self) -> &T {
+		match self {
+			Self::Val { was_shared: true, val } => val,
+			_ => panic!("ReqHolder not ref")
+		}
+	}
+}
+
 #[inline]
 pub fn get_route_data_as_ref<'a, T: Any, R: Any>(
 	data: &'a Data,
 	header: &'a RequestHeader,
-	req: &'a mut Option<R>
+	req: &'a RequestHolder<R>
 ) -> &'a T {
 	if is_req::<T, R>() {
-		let req = req.as_ref().unwrap();
+		let req = req.as_ref();
 		<dyn Any>::downcast_ref(req).unwrap()
 	} else if is_header::<T>() {
 		<dyn Any>::downcast_ref(header).unwrap()
@@ -136,10 +220,10 @@ pub fn get_route_data_as_ref<'a, T: Any, R: Any>(
 pub fn get_route_data_as_owned<T: Any, R: Any>(
 	_data: &Data,
 	_header: &RequestHeader,
-	req: &mut Option<R>
+	req: &RequestHolder<R>
 ) -> T {
 	if is_req::<T, R>() {
-		let req = req.take().unwrap();
+		let req = req.take();
 		unsafe {
 			transform_owned::<T, R>(req)
 		}
