@@ -55,7 +55,7 @@ impl Request for NameReq {
 }
 
 #[fire::api(NameReq)]
-fn get_name(
+async fn get_name(
 	_req: NameReq,
 	_some_data: &Name,
 	_more_data: &NameReq

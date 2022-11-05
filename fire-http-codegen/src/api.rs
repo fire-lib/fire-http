@@ -6,7 +6,7 @@ use crate::util::{
 
 use proc_macro2::{TokenStream};
 use syn::{Result, ItemFn};
-use quote::quote;
+use quote::{quote, format_ident};
 
 
 pub(crate) fn expand(
@@ -92,9 +92,10 @@ pub(crate) fn expand(
 			quote!()
 		};
 
+		let mut handler_args_vars = vec![];
 		let mut handler_args = vec![];
 
-		for ty in &input_types {
+		for (idx, ty) in input_types.iter().enumerate() {
 			let get_fn = match ref_type(&ty) {
 				Some(reff) => {
 					let elem = &reff.elem;
@@ -109,9 +110,12 @@ pub(crate) fn expand(
 				)
 			};
 
-			handler_args.push(quote!(
-				#get_fn(data, &header, &req)
+			let var_name = format_ident!("handler_arg_{idx}");
+
+			handler_args_vars.push(quote!(
+				let #var_name = #get_fn(data, &header, &req);
 			));
+			handler_args.push(quote!(#var_name));
 		}
 
 		quote!(
@@ -137,6 +141,8 @@ pub(crate) fn expand(
 
 					let req = #fire_api::util::RequestHolder::new(req);
 					let header = fire_req.header();
+
+					#(#handler_args_vars)*
 
 					let resp: __Response = handler(
 							#(#handler_args),*
