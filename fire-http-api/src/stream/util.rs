@@ -2,8 +2,7 @@ use super::{Stream, Streamer};
 use super::message::MessageData;
 use super::error::UnrecoverableError;
 use super::streamer::RawStreamer;
-
-use std::mem::ManuallyDrop;
+use crate::util::{RequestHolder, transform_owned};
 
 use fire::Data;
 
@@ -48,18 +47,18 @@ where
 #[inline]
 pub fn get_stream_data_as_ref<'a, T, S>(
 	data: &'a Data,
-	req: &'a mut Option<S>,
-	streamer: &'a mut Option<Streamer<S::Message>>
+	req: &'a RequestHolder<S>,
+	streamer: &'a RequestHolder<Streamer<S::Message>>
 ) -> &'a T
 where
 	T: Any,
 	S: Stream + 'static
 {
 	if is_req::<T, S>() {
-		let req = req.as_ref().unwrap();
+		let req = req.as_ref();
 		<dyn Any>::downcast_ref(req).unwrap()
 	} else if is_streamer::<T, S>() {
-		let streamer = streamer.as_ref().unwrap();
+		let streamer = streamer.as_ref();
 		<dyn Any>::downcast_ref(streamer).unwrap()
 	} else if is_data::<T>() {
 		<dyn Any>::downcast_ref(data).unwrap()
@@ -71,32 +70,26 @@ where
 #[inline]
 pub fn get_stream_data_as_owned<T, S>(
 	_data: &Data,
-	req: &mut Option<S>,
-	streamer: &mut Option<Streamer<S::Message>>
+	req: &RequestHolder<S>,
+	streamer: &RequestHolder<Streamer<S::Message>>
 ) -> T
 where
 	T: Any,
 	S: Stream + 'static
 {
 	if is_req::<T, S>() {
-		let req = req.take().unwrap();
+		let req = req.take();
 		unsafe {
 			transform_owned::<T, S>(req)
 		}
 	} else if is_streamer::<T, S>() {
-		let streamer = streamer.take().unwrap();
+		let streamer = streamer.take();
 		unsafe {
 			transform_owned::<T, Streamer<S::Message>>(streamer)
 		}
 	} else {
 		unreachable!()
 	}
-}
-
-/// Safety you need to know that T is `WebSocket`
-unsafe fn transform_owned<T: Any + Sized, R: Any>(from: R) -> T {
-	let mut from = ManuallyDrop::new(from);
-	(&mut from as *mut ManuallyDrop<R> as *mut T).read()
 }
 
 pub fn deserialize_req<S: Stream>(

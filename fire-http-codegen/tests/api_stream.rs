@@ -58,7 +58,9 @@ impl Stream for SenderReq {
 #[fire::api_stream(SenderReq)]
 async fn lucky_number_stream(
 	req: SenderReq,
-	mut streamer: Streamer<SenderMsg>
+	mut streamer: Streamer<SenderMsg>,
+	_some_data: &SenderMsg,
+	_more_data: &SenderReq
 ) -> Result<(), Error> {
 	for i in 0..req.count {
 		streamer.send(SenderMsg {
