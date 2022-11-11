@@ -1,7 +1,7 @@
 use crate::ApiArgs;
 use crate::route::generate_struct;
 use crate::util::{
-	validate_signature, fire_api_crate, validate_inputs_ref_or_owned, ref_type
+	validate_signature, fire_api_crate, validate_inputs, ref_type
 };
 
 use proc_macro2::{TokenStream};
@@ -20,8 +20,10 @@ pub(crate) fn expand(
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
-	let input_types = validate_inputs_ref_or_owned(item.sig.inputs.iter())?;
-
+	let input_types = validate_inputs(
+		item.sig.inputs.iter(),
+		true
+	)?;
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
@@ -47,6 +49,13 @@ pub(crate) fn expand(
 			let error_msg = format!("could not find {}", quote!(#ty));
 
 			let valid_fn = match ref_type(&ty) {
+				Some(reff) if reff.mutability.is_some() => {
+					let elem = &reff.elem;
+					quote!(
+						#fire_api::util::valid_route_data_as_mut
+							::<#elem, #req_ty>
+					)
+				},
 				Some(reff) => {
 					let elem = &reff.elem;
 					quote!(
@@ -97,6 +106,13 @@ pub(crate) fn expand(
 
 		for (idx, ty) in input_types.iter().enumerate() {
 			let get_fn = match ref_type(&ty) {
+				Some(reff) if reff.mutability.is_some() => {
+					let elem = &reff.elem;
+					quote!(
+						#fire_api::util::get_route_data_as_mut
+							::<#elem, #req_ty>
+					)
+				},
 				Some(reff) => {
 					let elem = &reff.elem;
 					quote!(
@@ -113,7 +129,7 @@ pub(crate) fn expand(
 			let var_name = format_ident!("handler_arg_{idx}");
 
 			handler_args_vars.push(quote!(
-				let #var_name = #get_fn(data, &header, &req);
+				let #var_name = #get_fn(data, &header, &req, &resp_header);
 			));
 			handler_args.push(quote!(#var_name));
 		}
@@ -132,15 +148,21 @@ pub(crate) fn expand(
 				async fn route_to_body(
 					fire_req: &mut #fire::Request,
 					data: &#fire::Data
-				) -> std::result::Result<#fire::Body, __Error> {
+				) -> std::result::Result<(
+					#fire_api::util::ResponseHeaders,
+					#fire::Body
+				), __Error> {
 					#fire_api::util::setup_request::<#req_ty>(fire_req)?;
 
 					let req = #fire_api::util::deserialize_req::<#req_ty>(
 						fire_req
 					).await?;
 
-					let req = #fire_api::util::RequestHolder::new(req);
+					let req = #fire_api::util::DataManager::new(req);
 					let header = fire_req.header();
+					let resp_header = #fire_api::util::DataManager::new(
+						#fire_api::util::ResponseHeaders::new()
+					);
 
 					#(#handler_args_vars)*
 
@@ -149,6 +171,7 @@ pub(crate) fn expand(
 					)#await_kw?;
 
 					#fire_api::util::serialize_resp::<#req_ty>(&resp)
+						.map(|body| (resp_header.take_owned(), body))
 				}
 
 				#fire::util::PinnedFuture::new(async move {

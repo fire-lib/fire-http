@@ -38,8 +38,9 @@ pub(crate) fn ref_type(ty: &Type) -> Option<&TypeReference> {
 }
 
 #[allow(dead_code)]
-pub(crate) fn validate_inputs_ref_or_owned(
-	inputs: punctuated::Iter<'_, FnArg>
+pub(crate) fn validate_inputs(
+	inputs: punctuated::Iter<'_, FnArg>,
+	mut_ref_allowed: bool
 ) -> Result<Vec<Box<Type>>> {
 	let mut v = vec![];
 
@@ -52,8 +53,10 @@ pub(crate) fn validate_inputs_ref_or_owned(
 		};
 
 		if let Some(reff) = ref_type(&ty) {
-			if let Some(mu) = reff.mutability {
-				return Err(Error::new_spanned(mu, "&mut not supported"))
+			if !mut_ref_allowed {
+				if let Some(mu) = reff.mutability {
+					return Err(Error::new_spanned(mu, "&mut not supported"))
+				}
 			}
 
 			if let Some(lifetime) = &reff.lifetime {

@@ -1,7 +1,7 @@
 use crate::Args;
 use crate::route::{generate_struct, detect_dyn_uri};
 use crate::util::{
-	fire_http_crate, validate_signature, validate_inputs_ref_or_owned, ref_type
+	fire_http_crate, validate_signature, validate_inputs, ref_type
 };
 
 use proc_macro2::TokenStream;
@@ -18,7 +18,7 @@ pub(crate) fn expand(
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
-	let input_types = validate_inputs_ref_or_owned(item.sig.inputs.iter())?;
+	let input_types = validate_inputs(item.sig.inputs.iter(), false)?;
 
 
 	let struct_name = &item.sig.ident;

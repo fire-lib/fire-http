@@ -1,7 +1,7 @@
 use crate::ApiArgs;
 use crate::route::generate_struct;
 use crate::util::{
-	fire_api_crate, validate_signature, validate_inputs_ref_or_owned, ref_type
+	fire_api_crate, validate_signature, validate_inputs, ref_type
 };
 
 use proc_macro2::TokenStream;
@@ -21,7 +21,7 @@ pub(crate) fn expand(
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
-	let input_types = validate_inputs_ref_or_owned(item.sig.inputs.iter())?;
+	let input_types = validate_inputs(item.sig.inputs.iter(), false)?;
 
 
 	let struct_name = &item.sig.ident;
@@ -142,8 +142,8 @@ pub(crate) fn expand(
 					let streamer = #stream_mod::util::transform_streamer
 						::<#stream_ty>(streamer);
 
-					let mut req = #fire_api::util::RequestHolder::new(req);
-					let mut streamer = #fire_api::util::RequestHolder::new(
+					let mut req = #fire_api::util::DataManager::new(req);
+					let mut streamer = #fire_api::util::DataManager::new(
 						streamer
 					);
 

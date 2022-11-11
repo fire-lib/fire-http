@@ -2,7 +2,7 @@ use super::{Stream, Streamer};
 use super::message::MessageData;
 use super::error::UnrecoverableError;
 use super::streamer::RawStreamer;
-use crate::util::{RequestHolder, transform_owned};
+use crate::util::{DataManager, transform_owned};
 
 use fire::Data;
 
@@ -47,8 +47,8 @@ where
 #[inline]
 pub fn get_stream_data_as_ref<'a, T, S>(
 	data: &'a Data,
-	req: &'a RequestHolder<S>,
-	streamer: &'a RequestHolder<Streamer<S::Message>>
+	req: &'a DataManager<S>,
+	streamer: &'a DataManager<Streamer<S::Message>>
 ) -> &'a T
 where
 	T: Any,
@@ -70,8 +70,8 @@ where
 #[inline]
 pub fn get_stream_data_as_owned<T, S>(
 	_data: &Data,
-	req: &RequestHolder<S>,
-	streamer: &RequestHolder<Streamer<S::Message>>
+	req: &DataManager<S>,
+	streamer: &DataManager<Streamer<S::Message>>
 ) -> T
 where
 	T: Any,

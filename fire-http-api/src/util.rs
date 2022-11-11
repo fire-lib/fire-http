@@ -4,14 +4,38 @@ use crate::ApiError;
 use std::time::Duration;
 use std::any::{Any, TypeId};
 use std::mem::ManuallyDrop;
-use std::cell::Cell;
+use std::cell::RefCell;
+use std::ops::{Deref, DerefMut};
 
 use tracing::error;
 
 use fire::{Response, Body, Data};
-use fire::header::{RequestHeader, Method, StatusCode, Mime};
+use fire::header::{RequestHeader, HeaderValues, Method, StatusCode, Mime};
 use fire::error::{ServerErrorKind};
 
+#[derive(Debug, Clone)]
+pub struct ResponseHeaders(HeaderValues);
+
+impl ResponseHeaders {
+	#[doc(hidden)]
+	pub fn new() -> Self {
+		Self(HeaderValues::new())
+	}
+}
+
+impl Deref for ResponseHeaders {
+	type Target = HeaderValues;
+
+	fn deref(&self) -> &HeaderValues {
+		&self.0
+	}
+}
+
+impl DerefMut for ResponseHeaders {
+	fn deref_mut(&mut self) -> &mut HeaderValues {
+		&mut self.0
+	}
+}
 
 pub fn setup_request<R: Request>(
 	req: &mut fire::Request
@@ -54,10 +78,10 @@ pub fn serialize_resp<R: Request>(
 
 /// todo find a better name
 pub fn transform_body_to_response<R: Request>(
-	res: Result<Body, R::Error>
+	res: Result<(ResponseHeaders, Body), R::Error>
 ) -> fire::Result<Response> {
-	let (status, body) = match res {
-		Ok(b) => (StatusCode::OK, b),
+	let (status, headers, body) = match res {
+		Ok((headers, body)) => (StatusCode::OK, headers.0, body),
 		Err(e) => {
 			error!("request handle error: {:?}", e);
 
@@ -67,17 +91,17 @@ pub fn transform_body_to_response<R: Request>(
 					e
 				))?;
 
-			(e.status_code(), body)
+			(e.status_code(), HeaderValues::new(), body)
 		}
 	};
 
-	let resp = Response::builder()
+	let mut resp = Response::builder()
 		.status_code(status)
 		.content_type(Mime::JSON)
-		.body(body)
-		.build();
+		.body(body);
+	*resp.values_mut() = headers;
 
-	Ok(resp)
+	Ok(resp.build())
 }
 
 #[allow(unused)]
@@ -99,6 +123,10 @@ fn is_header<T: Any>() -> bool {
 	TypeId::of::<T>() == TypeId::of::<RequestHeader>()
 }
 
+fn is_resp<T: Any>() -> bool {
+	TypeId::of::<T>() == TypeId::of::<ResponseHeaders>()
+}
+
 fn is_data<T: Any>() -> bool {
 	TypeId::of::<T>() == TypeId::of::<Data>()
 }
@@ -106,7 +134,14 @@ fn is_data<T: Any>() -> bool {
 /// fn to check if a type can be accessed in a route as reference
 #[inline]
 pub fn valid_route_data_as_ref<T: Any, R: Any>(data: &Data) -> bool {
-	is_req::<T, R>() || is_header::<T>() || is_data::<T>() || data.exists::<T>()
+	is_req::<T, R>() || is_header::<T>() || is_resp::<T>() || is_data::<T>() ||
+	data.exists::<T>()
+}
+
+/// fn to check if a type can be accessed in a route as mutable reference
+#[inline]
+pub fn valid_route_data_as_mut<T: Any, R: Any>(_data: &Data) -> bool {
+	is_req::<T, R>() || is_resp::<T>()
 }
 
 /// fn to check if a type can be accessed in a route as mutable reference
@@ -116,85 +151,55 @@ pub fn valid_route_data_as_owned<T: Any, R: Any>(_data: &Data) -> bool {
 }
 
 #[doc(hidden)]
-pub struct RequestHolder<T> {
-	inner: Cell<ReqHolder<T>>
+pub struct DataManager<T> {
+	inner: RefCell<Option<T>>
 }
 
-impl<T> RequestHolder<T> {
+impl<T> DataManager<T> {
 	pub fn new(val: T) -> Self {
 		Self {
-			inner: Cell::new(ReqHolder::Val { was_shared: false, val })
+			inner: RefCell::new(Some(val))
 		}
 	}
 
 	/// ## Panics
-	/// if the value is already taken or taken as a reference
+	/// if the value is already taken or borrowed
 	#[inline]
 	pub fn take(&self) -> T {
-		// This is always safe since no one has mutable access to the values
-		let inner = unsafe { &*self.inner.as_ptr() };
-
-		if !matches!(inner, ReqHolder::Val { was_shared: false, .. }) {
-			panic!("request already taken or used as reference");
-		}
-
-		// drop the reference since we wan't to replace its value
-		drop(inner);
-		match self.inner.replace(ReqHolder::Taken) {
-			ReqHolder::Val { was_shared: false, val } => val,
-			_ => unreachable!()
-		}
+		self.inner.borrow_mut().take().unwrap()
 	}
 
 	/// ## Panics
-	/// If the values is already taken
+	/// If the values is already taken or borrowed mutably
 	#[inline]
 	pub fn as_ref(&self) -> &T {
-		{
-			// This is always safe since no one has mutable access to the values
-			let inner = unsafe { &*self.inner.as_ptr() };
-
-			match inner {
-				ReqHolder::Val { was_shared: false, .. } => {},
-				ReqHolder::Val { was_shared: true, val } => return val,
-				ReqHolder::Taken => panic!("request already taken")
-			}
-		}
-
-		// the value is currently marked as owned
-		{
-			// This is safe since no one has access to inner at the moment
-			// exept us
-			let inner_mut = unsafe { &mut *self.inner.as_ptr() };
-
-			if let ReqHolder::Val { was_shared, .. } = inner_mut {
-				*was_shared = true;
-			}
-		}
-
-		// This is always safe since no one has mutable access to the values
-		let inner = unsafe { &*self.inner.as_ptr() };
-		inner.as_ref()
+		let r = self.inner.borrow();
+		let r = ManuallyDrop::new(r);
+		// since the borrow counter does not get decreased because of the
+		// ManuallyDrop and the lifetime not getting expanded this is safe
+		unsafe {
+			&*(r.deref().deref() as *const Option<T>)
+		}.as_ref().unwrap()
 	}
-}
 
-enum ReqHolder<T> {
-	Val {
-		was_shared: bool,
-		val: T
-	},
-	Taken
-}
-
-impl<T> ReqHolder<T> {
 	/// ## Panics
-	/// if req was not shared
+	/// If the values is already taken or borrowed mutably
 	#[inline]
-	fn as_ref(&self) -> &T {
-		match self {
-			Self::Val { was_shared: true, val } => val,
-			_ => panic!("ReqHolder not ref")
-		}
+	pub fn as_mut(&self) -> &mut T {
+		let r = self.inner.borrow_mut();
+		let mut r = ManuallyDrop::new(r);
+		// since the borrow counter does not get decreased because of the
+		// ManuallyDrop and the lifetime not getting expanded this is safe
+		unsafe {
+			&mut *(r.deref_mut().deref_mut() as *mut Option<T>)
+		}.as_mut().unwrap()
+	}
+
+	/// ##Panics
+	/// if the value was taken previously
+	#[inline]
+	pub fn take_owned(mut self) -> T {
+		self.inner.get_mut().take().unwrap()
 	}
 }
 
@@ -202,13 +207,17 @@ impl<T> ReqHolder<T> {
 pub fn get_route_data_as_ref<'a, T: Any, R: Any>(
 	data: &'a Data,
 	header: &'a RequestHeader,
-	req: &'a RequestHolder<R>
+	req: &'a DataManager<R>,
+	resp: &'a DataManager<ResponseHeaders>
 ) -> &'a T {
 	if is_req::<T, R>() {
 		let req = req.as_ref();
 		<dyn Any>::downcast_ref(req).unwrap()
 	} else if is_header::<T>() {
 		<dyn Any>::downcast_ref(header).unwrap()
+	} else if is_resp::<T>() {
+		let resp = resp.as_ref();
+		<dyn Any>::downcast_ref(resp).unwrap()
 	} else if is_data::<T>() {
 		<dyn Any>::downcast_ref(data).unwrap()
 	} else {
@@ -217,10 +226,29 @@ pub fn get_route_data_as_ref<'a, T: Any, R: Any>(
 }
 
 #[inline]
+pub fn get_route_data_as_mut<'a, T: Any, R: Any>(
+	_data: &'a Data,
+	_header: &'a RequestHeader,
+	req: &'a DataManager<R>,
+	resp: &'a DataManager<ResponseHeaders>
+) -> &'a mut T {
+	if is_req::<T, R>() {
+		let req = req.as_mut();
+		<dyn Any>::downcast_mut(req).unwrap()
+	} else if is_resp::<T>() {
+		let resp = resp.as_mut();
+		<dyn Any>::downcast_mut(resp).unwrap()
+	} else {
+		unreachable!()
+	}
+}
+
+#[inline]
 pub fn get_route_data_as_owned<T: Any, R: Any>(
 	_data: &Data,
 	_header: &RequestHeader,
-	req: &RequestHolder<R>
+	req: &DataManager<R>,
+	_resp: &DataManager<ResponseHeaders>
 ) -> T {
 	if is_req::<T, R>() {
 		let req = req.take();
@@ -233,6 +261,7 @@ pub fn get_route_data_as_owned<T: Any, R: Any>(
 }
 
 /// Safety you need to know that T is `R`
+#[inline]
 pub(crate) unsafe fn transform_owned<T: Any + Sized, R: Any>(from: R) -> T {
 	let mut from = ManuallyDrop::new(from);
 	(&mut from as *mut ManuallyDrop<R> as *mut T).read()
