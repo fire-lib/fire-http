@@ -17,6 +17,7 @@ mod stream;
 pub mod streamer;
 pub mod error;
 pub mod util;
+mod poll_fn;
 
 pub use server::StreamServer;
 pub use stream::{StreamKind, Stream};

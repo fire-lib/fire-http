@@ -2,12 +2,12 @@ use super::stream::{Stream, StreamKind};
 use super::message::{Message, MessageData, MessageKind};
 use super::streamer::RawStreamer;
 use super::error::UnrecoverableError;
+use super::poll_fn::poll_fn;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::task::Poll;
-use std::future::poll_fn;
 
 use tokio::sync::mpsc;
 use tokio::time::{interval, Duration};
