@@ -136,8 +136,7 @@ impl FireBuilder {
 	pub async fn build(self) -> Result<Fire> {
 		let wood = Arc::new(Wood::new(self.data, self.routes, self.configs));
 
-		let server = Server::bind(self.addr, wood.clone()).await
-			.map_err(Error::from_server_error)?;
+		let server = Server::bind(self.addr, wood.clone()).await?;
 
 		Ok(Fire {
 			wood, server,
@@ -177,7 +176,6 @@ impl Fire {
 		}
 
 		self.server.serve().await
-			.map_err(Error::from_server_error)
 	}
 }
 
