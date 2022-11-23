@@ -15,9 +15,10 @@ mod util;
 macro_rules! ws_client {
 	($srv_addr:expr, $uri:expr, |$ws:ident| $block:block) => (
 		let addr = $srv_addr.to_string();
+		let uri = format!("http://{addr}{}", $uri);
 
 		let req = hyper::Request::builder()
-			.uri($uri)
+			.uri(uri)
 			.header("host", &addr)
 			.header("upgrade", "websocket")
 			.header("sec-websocket-version", "13")
@@ -25,7 +26,7 @@ macro_rules! ws_client {
 			.body(Body::new().into_http_body())
 			.unwrap();
 
-		let resp = util::send_request(&addr, req).await.unwrap();
+		let resp = util::send_request(req).await.unwrap();
 
 		assert_eq!(
 			resp.status().as_u16(),

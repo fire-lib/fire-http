@@ -6,12 +6,6 @@ use types::body::BodyHttp;
 
 use std::io;
 
-use tokio::net::TcpStream;
-
-use hyper::client::conn::http1;
-use hyper::body::Incoming;
-
-
 
 macro_rules! spawn_server {
 	(|$builder:ident| $block:block) => ({
@@ -33,23 +27,11 @@ macro_rules! other_err {
 }
 
 pub async fn send_request(
-	addr: &str,
 	req: hyper::Request<BodyHttp>
-) -> io::Result<hyper::Response<Incoming>> {
-	let stream = TcpStream::connect(addr).await?;
+) -> io::Result<hyper::Response<hyper::Body>> {
+	let client = hyper::Client::builder().build_http();
 
-	// create handshake
-	let (mut request_sender, conn) = http1::handshake(stream).await
-		.map_err(|e| other_err!(e))?;
-
-	// drive http state
-	tokio::spawn(async move {
-		if let Err(e) = conn.await {
-			eprintln!("Http connection error {:?}", e);
-		}
-	});
-
-	request_sender.send_request(req).await
+	client.request(req).await
 		.map_err(|e| other_err!(e))
 }
 
@@ -60,13 +42,14 @@ macro_rules! make_request {
 		|$builder:ident| $block:block
 	) => (async {
 		let addr = $srv_addr.to_string();
+		let uri = format!("http://{addr}{}", $uri);
 		let $builder = hyper::Request::builder()
 			.method($method)
-			.uri($uri)
+			.uri(uri)
 			.header("host", &addr);
-		let resp = util::send_request(&addr, $block).await
+		let resp = util::send_request($block).await
 			.expect("failed to send request")
-			.map(fire::Body::from_incoming);
+			.map(fire::Body::from_hyper);
 
 		util::TestResponse::new(resp)
 	});

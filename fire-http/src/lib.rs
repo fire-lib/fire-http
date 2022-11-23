@@ -34,7 +34,6 @@ pub mod json;
 #[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
 pub mod ws;
 
-use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
 use std::any::Any;
@@ -48,7 +47,7 @@ pub use types::{Request, Response, Body, header, body};
 pub use codegen::*;
 
 /// Prepares a server.
-pub async fn build(addr: impl ToSocketAddrs) -> io::Result<FireBuilder> {
+pub async fn build(addr: impl ToSocketAddrs) -> Result<FireBuilder> {
 	FireBuilder::new(addr).await
 }
 
@@ -62,10 +61,11 @@ pub struct FireBuilder {
 }
 
 impl FireBuilder {
-
-	pub(crate) async fn new<A>(addr: A) -> io::Result<Self>
+	pub(crate) async fn new<A>(addr: A) -> Result<Self>
 	where A: ToSocketAddrs {
-		let addr = tokio::net::lookup_host(addr).await?.next().unwrap();
+		let addr = tokio::net::lookup_host(addr).await
+			.map_err(Error::from_server_error)?
+			.next().unwrap();
 		Ok(Self {
 			addr,
 			data: Data::new(),
@@ -153,7 +153,6 @@ impl FireBuilder {
 		let fire = self.build().await?;
 		fire.ignite().await
 	}
-
 }
 
 /// A Fire that is ready to be ignited.

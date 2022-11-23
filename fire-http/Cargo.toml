@@ -1,7 +1,7 @@
 [package]
 name = "fire-http"
 description = "Http async library based on hyper and tokio"
-version = "0.3.0-rc.3"
+version = "0.3.0-rc.4"
 authors = ["Sören Meier <info@s-me.ch>"]
 repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
@@ -14,7 +14,7 @@ default = ["http1"]
 json = ["serde", "serde_json", "types/json", "codegen/json"]
 fs = ["tokio/fs", "percent-encoding", "rand"]
 http1 = ["hyper/http1"]
-# http2 = ["hyper/http2"]
+http2 = ["hyper/http2"]
 ws = ["tokio-tungstenite", "futures-util", "base64", "sha-1", "codegen/ws"]
 ## Trace logging is only enabled with this feature
 trace = []
@@ -49,7 +49,7 @@ required-features = ["ws"]
 
 [dependencies]
 types = { package = "fire-http-representation", version = "0.2.0-rc.4", path = "../fire-http-representation" }
-hyper = { version = "1.0.0-rc.1", features = ["server"] }
+hyper = { version = "0.14", features = ["server", "runtime"] }
 bytes = "1.0"
 serde_json = { version = "1.0", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
@@ -65,7 +65,7 @@ codegen = { package = "fire-http-codegen", version = "0.1.0-rc.1", path = "../fi
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
-hyper = { version = "1.0.0-rc.1", features = ["http1", "server", "client"] }
+hyper = { version = "0.14", features = ["http1", "server", "client"] }
 tracing-subscriber = "0.3"
 
 [package.metadata.docs.rs]

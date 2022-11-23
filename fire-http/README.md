@@ -30,6 +30,6 @@ For more examples look in the examples directory and the test directory.
 ## Features
 - json
 - fs
-<!-- - http2 (enables http 2 support) -->
+- http2 (enables http 2 support)
 - ws (adds websocket support)
 - trace
