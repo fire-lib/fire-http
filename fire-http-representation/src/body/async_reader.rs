@@ -1,6 +1,6 @@
 use super::{
 	size_limit_reached, timed_out, BoxedSyncRead, PinnedAsyncRead,
-	PinnedAsyncBytesStream, Constraints, IncomingAsAsyncBytesStream
+	PinnedAsyncBytesStream, Constraints, HyperBodyAsAsyncBytesStream
 };
 
 use std::io;
@@ -27,8 +27,8 @@ impl BodyAsyncReader {
 		let inner = match inner {
 			super::Inner::Empty => Inner::Bytes(Bytes::new()),
 			super::Inner::Bytes(b) => Inner::Bytes(b),
-			super::Inner::Incoming(i) => Inner::Incoming(
-				StreamReader::new(IncomingAsAsyncBytesStream::new(i))
+			super::Inner::Hyper(i) => Inner::Hyper(
+				StreamReader::new(HyperBodyAsAsyncBytesStream::new(i))
 			),
 			super::Inner::SyncReader(r) => Inner::SyncReader(r),
 			super::Inner::AsyncReader(r) => Inner::AsyncReader(r),
@@ -56,7 +56,7 @@ impl AsyncRead for BodyAsyncReader {
 
 enum Inner {
 	Bytes(Bytes),
-	Incoming(StreamReader<IncomingAsAsyncBytesStream, Bytes>),
+	Hyper(StreamReader<HyperBodyAsAsyncBytesStream, Bytes>),
 	SyncReader(BoxedSyncRead),
 	AsyncReader(PinnedAsyncRead),
 	AsyncBytesStreamer(StreamReader<PinnedAsyncBytesStream, Bytes>)
@@ -80,7 +80,7 @@ impl AsyncRead for Inner {
 				buf.put_slice(&b.split_to(read));
 				Poll::Ready(Ok(()))
 			},
-			Self::Incoming(i) => Pin::new(i).poll_read(cx, buf),
+			Self::Hyper(i) => Pin::new(i).poll_read(cx, buf),
 			Self::SyncReader(r) => {
 				// todo implement this without blocking the current thread
 				let filled = match r.read(buf.initialize_unfilled()) {

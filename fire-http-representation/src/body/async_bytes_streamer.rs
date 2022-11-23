@@ -1,6 +1,6 @@
 use super::{
 	size_limit_reached, timed_out, Constraints, BoxedSyncRead, PinnedAsyncRead,
-	PinnedAsyncBytesStream, IncomingAsAsyncBytesStream
+	PinnedAsyncBytesStream, HyperBodyAsAsyncBytesStream
 };
 
 use std::{io, mem};
@@ -30,8 +30,8 @@ impl BodyAsyncBytesStreamer {
 		let inner = match inner {
 			super::Inner::Empty => Inner::Empty,
 			super::Inner::Bytes(b) => Inner::Bytes(b),
-			super::Inner::Incoming(i) => Inner::Incoming(
-				IncomingAsAsyncBytesStream::new(i)
+			super::Inner::Hyper(i) => Inner::Hyper(
+				HyperBodyAsAsyncBytesStream::new(i)
 			),
 			super::Inner::SyncReader(r) => Inner::SyncReader {
 				reader: r,
@@ -66,7 +66,7 @@ const DEFAULT_CAP: usize = 4096;
 enum Inner {
 	Empty,
 	Bytes(Bytes),
-	Incoming(IncomingAsAsyncBytesStream),
+	Hyper(HyperBodyAsAsyncBytesStream),
 	SyncReader {
 		reader: BoxedSyncRead,
 		buf: BytesMut
@@ -91,7 +91,7 @@ impl Stream for Inner {
 				*me = Self::Empty;
 				Poll::Ready(Some(Ok(bytes)))
 			},
-			Self::Incoming(i) => Pin::new(i).poll_next(cx),
+			Self::Hyper(i) => Pin::new(i).poll_next(cx),
 			Self::SyncReader { reader, buf } => {
 				if buf.len() == 0 {
 					*buf = BytesMut::zeroed(DEFAULT_CAP);

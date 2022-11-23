@@ -12,7 +12,7 @@ use async_bytes_streamer::async_bytes_streamer_into_bytes;
 
 mod body_http;
 pub use body_http::BodyHttp;
-use body_http::IncomingAsAsyncBytesStream;
+use body_http::HyperBodyAsAsyncBytesStream;
 
 use std::{io, fmt, mem};
 use std::pin::Pin;
@@ -23,8 +23,6 @@ use tokio::task;
 use tokio::io::AsyncRead;
 
 use futures_core::Stream as AsyncStream;
-
-use hyper::body::Incoming;
 
 use bytes::Bytes;
 
@@ -39,7 +37,7 @@ enum Inner {
 	Empty,
 	// Bytes will never be empty
 	Bytes(Bytes),
-	Incoming(Incoming),
+	Hyper(hyper::Body),
 	SyncReader(BoxedSyncRead),
 	AsyncReader(PinnedAsyncRead),
 	AsyncBytesStreamer(PinnedAsyncBytesStream)
@@ -50,7 +48,7 @@ impl fmt::Debug for Inner {
 		match self {
 			Self::Empty => f.write_str("Empty"),
 			Self::Bytes(b) => f.debug_tuple("Bytes").field(&b.len()).finish(),
-			Self::Incoming(_) => f.write_str("Incoming"),
+			Self::Hyper(_) => f.write_str("Hyper"),
 			Self::SyncReader(_) => f.write_str("SyncReader"),
 			Self::AsyncReader(_) => f.write_str("AsyncReader"),
 			Self::AsyncBytesStreamer(_) => f.write_str("AsyncBytesStreamer")
@@ -109,9 +107,9 @@ impl Body {
 		}
 	}
 
-	/// Creates a new Body from `Incoming`.
-	pub fn from_incoming(incoming: Incoming) -> Self {
-		Self::new_inner(Inner::Incoming(incoming))
+	/// Creates a new Body from a `hyper::Body`.
+	pub fn from_hyper(body: hyper::Body) -> Self {
+		Self::new_inner(Inner::Hyper(body))
 	}
 
 	/// Creates a new Body from a `Read` implementation.
@@ -187,9 +185,9 @@ impl Body {
 				}
 				Ok(b)
 			},
-			Inner::Incoming(i) => {
+			Inner::Hyper(i) => {
 				async_bytes_streamer_into_bytes(
-					IncomingAsAsyncBytesStream::new(i),
+					HyperBodyAsAsyncBytesStream::new(i),
 					self.constraints
 				).await
 			},
@@ -277,9 +275,9 @@ impl From<&'static str> for Body {
 	}
 }
 
-impl From<Incoming> for Body {
-	fn from(i: Incoming) -> Self {
-		Self::from_incoming(i)
+impl From<hyper::Body> for Body {
+	fn from(i: hyper::Body) -> Self {
+		Self::from_hyper(i)
 	}
 }
 
@@ -293,4 +291,20 @@ fn timed_out(msg: &'static str) -> io::Error {
 
 fn join_error(error: task::JoinError) -> io::Error {
 	io::Error::new(io::ErrorKind::Other, error)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn is_unpin<T: Unpin>() {}
+	fn is_send<T: Send>() {}
+	fn is_sync<T: Sync>() {}
+
+	#[test]
+	fn test_body() {
+		is_unpin::<Body>();
+		is_send::<Body>();
+		is_sync::<Body>();
+	}
 }
