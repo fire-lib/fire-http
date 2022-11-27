@@ -1,4 +1,4 @@
-use crate::{Result, Error};
+use crate::{Result, Error, FirePit};
 use crate::util::PinnedFuture;
 use crate::fire::{self, Wood};
 
@@ -19,8 +19,8 @@ use hyper::server::conn::{AddrIncoming, AddrStream};
 pub type HyperRequest = hyper::Request<hyper::Body>;
 
 // todo replace this function once hyper-util is ready
-pub struct Server {
-	listener: hyper::Server<AddrIncoming, MakeService>
+pub(crate) struct Server {
+	listener: hyper::Server<AddrIncoming, MakeFireService>
 }
 
 impl Server {
@@ -30,7 +30,7 @@ impl Server {
 	) -> Result<Self> {
 		let listener = hyper::Server::try_bind(&addr)
 			.map_err(Error::from_server_error)?
-			.serve(MakeService { wood });
+			.serve(MakeFireService { wood });
 		Ok(Self { listener })
 	}
 
@@ -43,11 +43,18 @@ impl Server {
 	}
 }
 
-pub(crate) struct MakeService {
-	wood: Arc<Wood>
+/// A `tower::Service` to be used with the `hyper::Server`
+pub struct MakeFireService {
+	pub(crate) wood: Arc<Wood>
 }
 
-impl<'a> Service<&'a AddrStream> for MakeService {
+impl MakeFireService {
+	pub fn pit(&self) -> FirePit {
+		FirePit { wood: self.wood.clone() }
+	}
+}
+
+impl<'a> Service<&'a AddrStream> for MakeFireService {
 	type Response = FireService;
 	type Error = Infallible;
 	type Future = future::Ready<StdResult<FireService, Infallible>>;
@@ -68,7 +75,7 @@ impl<'a> Service<&'a AddrStream> for MakeService {
 	}
 }
 
-pub(crate) struct FireService {
+pub struct FireService {
 	wood: Arc<Wood>,
 	address: SocketAddr
 }

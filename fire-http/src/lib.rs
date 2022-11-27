@@ -34,6 +34,10 @@ pub mod json;
 #[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
 pub mod ws;
 
+pub mod service {
+	pub use crate::server::{MakeFireService, FireService};
+}
+
 use std::net::SocketAddr;
 use std::time::Duration;
 use std::any::Any;
@@ -151,6 +155,14 @@ impl FireBuilder {
 	pub async fn ignite(self) -> Result<()> {
 		let fire = self.build().await?;
 		fire.ignite().await
+	}
+
+	/// Creates a tower service which can be used to build a manual hyper
+	/// server. Unless you wan't to use a custom transport layer don't use this.
+	pub fn into_make_fire_service(self) -> service::MakeFireService {
+		let wood = Arc::new(Wood::new(self.data, self.routes, self.configs));
+
+		service::MakeFireService { wood }
 	}
 }
 
