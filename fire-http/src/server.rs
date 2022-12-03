@@ -52,6 +52,10 @@ impl MakeFireService {
 	pub fn pit(&self) -> FirePit {
 		FirePit { wood: self.wood.clone() }
 	}
+
+	pub fn make(&self, address: SocketAddr) -> FireService {
+		FireService { wood: self.wood.clone(), address }
+	}
 }
 
 impl<'a> Service<&'a AddrStream> for MakeFireService {
