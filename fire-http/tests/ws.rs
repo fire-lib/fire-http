@@ -65,7 +65,11 @@ async fn build_con() {
 
 	// // build route
 	#[ws("/")]
-	async fn websocket_route(mut ws: WebSocket) -> Result<(), Error> {
+	async fn websocket_route(
+		mut ws: WebSocket,
+		_: &SomeData,
+		_: &SomeData
+	) -> Result<(), Error> {
 		let mut c = 0;
 
 		while let Some(msg) = ws.receive().await? {
@@ -81,8 +85,12 @@ async fn build_con() {
 		Ok(())
 	}
 
+	#[derive(Debug)]
+	struct SomeData;
+
 	// builder server
 	let addr = spawn_server!(|builder| {
+		builder.add_data(SomeData);
 		builder.add_raw_route(websocket_route);
 	});
 

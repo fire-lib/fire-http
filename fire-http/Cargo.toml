@@ -1,7 +1,7 @@
 [package]
 name = "fire-http"
 description = "Http async library based on hyper and tokio"
-version = "0.3.2"
+version = "0.3.3"
 authors = ["Sören Meier <info@s-me.ch>"]
 repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
@@ -21,20 +21,40 @@ ws = ["tokio-tungstenite", "futures-util", "base64", "sha-1", "codegen/ws"]
 trace = []
 
 [[example]]
-name = "write_json"
-required-features = ["json"]
+name = "catcher"
+test = true
+
+[[example]]
+name = "cors"
+test = true
+
+[[example]]
+name = "hello_world"
+test = true
+
+[[example]]
+name = "post"
+test = true
 
 [[example]]
 name = "read_json"
 required-features = ["json"]
-
-[[example]]
-name = "with_file"
-required-features = ["fs"]
+test = true
 
 [[example]]
 name = "static_files"
 required-features = ["fs"]
+test = true
+
+[[example]]
+name = "with_file"
+required-features = ["fs"]
+test = true
+
+[[example]]
+name = "write_json"
+required-features = ["json"]
+test = true
 
 [[test]]
 name = "json"
@@ -62,7 +82,7 @@ tokio-tungstenite = { version = "0.17", default-features = false, optional = tru
 futures-util = { version = "0.3.5", default-features = false, optional = true }
 base64 = { version = "0.13", optional = true }
 sha-1 = { version = "0.10", optional = true }
-codegen = { package = "fire-http-codegen", version = "0.1", path = "../fire-http-codegen" }
+codegen = { package = "fire-http-codegen", version = "0.1.1", path = "../fire-http-codegen" }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }

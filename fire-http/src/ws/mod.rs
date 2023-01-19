@@ -1,3 +1,4 @@
+#[doc(hidden)]
 pub mod util;
 
 use std::fmt;

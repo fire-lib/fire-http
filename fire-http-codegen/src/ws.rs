@@ -6,7 +6,7 @@ use crate::util::{
 
 use proc_macro2::TokenStream;
 use syn::{Result, ItemFn};
-use quote::quote;
+use quote::{quote, format_ident};
 
 
 pub(crate) fn expand(
@@ -89,9 +89,10 @@ pub(crate) fn expand(
 			quote!()
 		};
 
+		let mut handler_args_vars = vec![];
 		let mut handler_args = vec![];
 
-		for ty in input_types {
+		for (idx, ty) in input_types.iter().enumerate() {
 			let get_fn = match ref_type(&ty) {
 				Some(reff) => {
 					let elem = &reff.elem;
@@ -102,9 +103,12 @@ pub(crate) fn expand(
 				}
 			};
 
-			handler_args.push(quote!(
-				#get_fn(&data, &mut ws)
+			let var_name = format_ident!("handler_arg_{idx}");
+
+			handler_args_vars.push(quote!(
+				let #var_name = #get_fn(&data, &ws);
 			));
+			handler_args.push(quote!(#var_name));
 		}
 
 		quote!(
@@ -132,7 +136,9 @@ pub(crate) fn expand(
 								let ws = #fire::ws::WebSocket::new(
 									upgraded
 								).await;
-								let mut ws = Some(ws);
+								let ws = #fire::ws::util::DataManager::new(ws);
+
+								#(#handler_args_vars)*
 
 								let ret = handler(
 									#(#handler_args),*
