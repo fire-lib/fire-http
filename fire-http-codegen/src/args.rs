@@ -26,7 +26,7 @@ mod api {
 	use syn::Type;
 
 
-	#[derive(Debug, Clone)]
+	#[derive(Clone)]
 	pub(crate) struct ApiArgs {
 		pub ty: Type
 	}
