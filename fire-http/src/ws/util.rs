@@ -20,6 +20,8 @@ use hyper::upgrade::OnUpgrade;
 #[doc(hidden)]
 pub use tokio::task::spawn;
 
+use base64::prelude::{Engine as _, BASE64_STANDARD};
+
 
 fn is_ws<T: Any>() -> bool {
 	TypeId::of::<T>() == TypeId::of::<WebSocket>()
@@ -163,7 +165,7 @@ pub fn upgrade(req: &mut HyperRequest) -> Result<(OnUpgrade, String)> {
 		sha1.update(websocket_key);
 		sha1.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 		// cannot fail because 
-		base64::encode(sha1.finalize())
+		BASE64_STANDARD.encode(sha1.finalize())
 	};
 
 	let on_upgrade = hyper::upgrade::on(req);

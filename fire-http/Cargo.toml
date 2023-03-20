@@ -1,7 +1,7 @@
 [package]
 name = "fire-http"
 description = "Http async library based on hyper and tokio"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["Sören Meier <info@s-me.ch>"]
 repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
@@ -78,9 +78,9 @@ tokio = { version = "1.0", features = ["net"] }
 percent-encoding = { version = "2.1", optional = true }
 rand = { version = "0.8", optional = true }
 tracing = { version = "0.1" }
-tokio-tungstenite = { version = "0.17", default-features = false, optional = true }
+tokio-tungstenite = { version = "0.18", default-features = false, optional = true }
 futures-util = { version = "0.3.5", default-features = false, optional = true }
-base64 = { version = "0.13", optional = true }
+base64 = { version = "0.21", optional = true }
 sha-1 = { version = "0.10", optional = true }
 codegen = { package = "fire-http-codegen", version = "0.1.1", path = "../fire-http-codegen" }
 
