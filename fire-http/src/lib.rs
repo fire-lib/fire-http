@@ -34,6 +34,10 @@ pub mod json;
 #[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
 pub mod ws;
 
+#[cfg(feature = "graphql")]
+#[cfg_attr(docsrs, doc(cfg(feature = "graphql")))]
+pub mod graphql;
+
 pub mod service {
 	pub use crate::server::{MakeFireService, FireService};
 }

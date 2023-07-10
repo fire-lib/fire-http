@@ -1,7 +1,7 @@
 [package]
 name = "fire-http"
 description = "Http async library based on hyper and tokio"
-version = "0.3.4"
+version = "0.3.5"
 authors = ["Sören Meier <info@s-me.ch>"]
 repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
@@ -12,11 +12,12 @@ rust-version = "1.58"
 [features]
 default = ["http1"]
 
-json = ["serde", "serde_json", "types/json", "codegen/json"]
-fs = ["tokio/fs", "percent-encoding", "rand"]
+json = ["dep:serde", "dep:serde_json", "types/json", "codegen/json"]
+fs = ["tokio/fs", "dep:percent-encoding", "dep:rand"]
 http1 = ["hyper/http1"]
 http2 = ["hyper/http2"]
-ws = ["tokio-tungstenite", "futures-util", "base64", "sha-1", "codegen/ws"]
+ws = ["dep:tokio-tungstenite", "dep:futures-util", "dep:base64", "dep:sha-1", "codegen/ws"]
+graphql = ["json", "dep:juniper"]
 ## Trace logging is only enabled with this feature
 trace = []
 
@@ -83,6 +84,7 @@ futures-util = { version = "0.3.5", default-features = false, optional = true }
 base64 = { version = "0.21", optional = true }
 sha-1 = { version = "0.10", optional = true }
 codegen = { package = "fire-http-codegen", version = "0.1.1", path = "../fire-http-codegen" }
+juniper = { version = "0.15", default-features = false, optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
