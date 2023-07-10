@@ -32,3 +32,6 @@ impl Data {
 			.and_then(|a| a.downcast_ref())
 	}
 }
+
+#[cfg(feature = "graphql")]
+impl juniper::Context for Data {}
