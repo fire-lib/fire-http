@@ -59,14 +59,10 @@ where
 
 impl<Ctx, Q, M, Sub, S> GraphQl<Ctx, Q, M, Sub, S>
 where
-	Q: GraphQLTypeAsync<S, Context=Ctx>,
-	Q::TypeInfo: Sync,
-	M: GraphQLTypeAsync<S, Context=Ctx>,
-	M::TypeInfo: Sync,
-	Sub: GraphQLTypeAsync<S, Context=Ctx>,
-	Sub::TypeInfo: Sync,
-	Ctx: Sync,
-	S: ScalarValue + Send + Sync
+	Q: GraphQLType<S, Context=Ctx>,
+	M: GraphQLType<S, Context=Ctx>,
+	Sub: GraphQLType<S, Context=Ctx>,
+	S: ScalarValue
 {
 	pub fn new(
 		uri: &'static str,
