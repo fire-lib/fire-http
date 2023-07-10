@@ -4,8 +4,6 @@ use crate::routes::Route;
 use crate::util::PinnedFuture;
 use crate::error::{ClientErrorKind};
 
-use std::sync::Arc;
-
 use juniper::{
 	RootNode, GraphQLType, GraphQLTypeAsync, GraphQLSubscriptionType,
 	ScalarValue
@@ -55,8 +53,8 @@ where
 	S: ScalarValue
 {
 	uri: &'static str,
-	root_node: Arc<RootNode<'static, Q, M, Sub, S>>,
-	context: Arc<Ctx>
+	root_node: RootNode<'static, Q, M, Sub, S>,
+	context: Ctx
 }
 
 impl<Ctx, Q, M, Sub, S> GraphQl<Ctx, Q, M, Sub, S>
@@ -72,8 +70,8 @@ where
 {
 	pub fn new(
 		uri: &'static str,
-		root_node: Arc<RootNode<'static, Q, M, Sub, S>>,
-		context: Arc<Ctx>
+		root_node: RootNode<'static, Q, M, Sub, S>,
+		context: Ctx
 	) -> Self {
 		Self { uri, root_node, context }
 	}
@@ -123,7 +121,7 @@ where
 				_ => return Err(ClientErrorKind::BadRequest.into())
 			};
 
-			let res = req.execute(&*self.root_node, &self.context).await;
+			let res = req.execute(&self.root_node, &self.context).await;
 
 			let mut resp = Response::builder()
 				.content_type(Mime::JSON);
