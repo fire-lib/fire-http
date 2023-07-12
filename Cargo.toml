@@ -1,5 +1,5 @@
 [workspace]
-
+resolver = "2"
 members = [
 	"fire-http",
 	"fire-http-representation",

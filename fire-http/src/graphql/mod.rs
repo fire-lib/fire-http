@@ -1,3 +1,5 @@
+mod graphiql;
+
 use crate::{Request, Response, Error, Data, Body};
 use crate::header::{self, RequestHeader, Method, StatusCode, Mime};
 use crate::routes::Route;
@@ -38,7 +40,7 @@ impl Route for GraphiQl {
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		PinnedFuture::new(async move {
 			Ok(Response::html(
-				juniper::http::graphiql::graphiql_source(self.graphql_uri, None)
+				graphiql::graphiql_source(self.graphql_uri)
 			))
 		})
 	}
