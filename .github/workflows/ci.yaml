@@ -1,33 +1,59 @@
-
-name: CI
-
-on:
+on: 
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 env:
-  CARGO_TERM_COLOR: always
-  rust_min: 1.58.0
+  RUSTFLAGS: -Dwarnings
+  # change manually in matrix
+  rust_min: 1.64.0
 
 jobs:
-  build_and_test:
-
+  test:
+    name: Test
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+          - 1.64.0
     steps:
       - uses: actions/checkout@v3
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_min }}
-          override: true
-      - name: Build
-        run: cargo build
-      - name: Run tests
-        run: cargo test
-      - name: Build all features
-        run: cargo build --all-features
-      - name: Run tests with all features
-        run: cargo test --all-features
+          toolchain: ${{ matrix.rust }}
+      - run: cargo test
+
+  test_no_features:
+    name: Test No features
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+          - 1.64.0
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - run: cargo test --no-default-features
+
+  test_all_features:
+    name: Test All features
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+          - 1.64.0
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - run: cargo test --all-features
