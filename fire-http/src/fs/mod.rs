@@ -21,7 +21,9 @@ mod caching;
 pub use caching::Caching;
 
 mod static_files;
-pub use static_files::{StaticFiles, StaticFile, serve_file};
+pub use static_files::{
+	StaticFiles, StaticFilesOwned, StaticFile, StaticFileOwned, serve_file
+};
 
 mod memory_files;
 pub use memory_files::{serve_memory_file, MemoryFile};

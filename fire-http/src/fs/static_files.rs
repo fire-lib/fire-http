@@ -11,6 +11,8 @@ use crate::util::PinnedFuture;
 use std::path::Path;
 use std::time::Duration;
 use std::io;
+use std::borrow::Cow;
+
 
 /// returns io::Error not found if the path is a directory
 pub async fn serve_file(
@@ -112,8 +114,61 @@ impl IntoRoute for StaticFiles {
 
 	fn into_route(self) -> StaticFilesRoute {
 		StaticFilesRoute {
-			uri: self.uri,
-			path: self.path,
+			uri: self.uri.into(),
+			path: self.path.into(),
+			caching: self.caching.into()
+		}
+	}
+}
+
+/// Static get handler which servers files from a directory.
+/// 
+/// ## Example
+/// ```
+/// # use fire_http as fire;
+/// use fire::fs::StaticFilesOwned;
+/// 
+/// #[tokio::main]
+/// async fn main() {
+/// 	let mut server = fire::build("127.0.0.1:0").await.unwrap();
+/// 	server.add_route(
+/// 		StaticFilesOwned::new("/files".into(), "./www/".into())
+/// 	);
+/// }
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StaticFilesOwned {
+	uri: String,
+	path: String,
+	caching: CachingBuilder
+}
+
+impl StaticFilesOwned {
+	/// Creates a `StaticFiles` with Default caching settings
+	pub fn new(uri: String, path: String) -> Self {
+		Self { uri, path, caching: CachingBuilder::Default }
+	}
+
+	pub fn no_cache(uri: String, path: String) -> Self {
+		Self { uri, path, caching: CachingBuilder::None }
+	}
+
+	pub fn cache_with_age(
+		uri: String,
+		path: String,
+		max_age: Duration
+	) -> Self {
+		Self { uri, path, caching: CachingBuilder::MaxAge(max_age) }
+	}
+}
+
+impl IntoRoute for StaticFilesOwned {
+	type IntoRoute = StaticFilesRoute;
+
+	fn into_route(self) -> StaticFilesRoute {
+		StaticFilesRoute {
+			uri: self.uri.into(),
+			path: self.path.into(),
 			caching: self.caching.into()
 		}
 	}
@@ -121,15 +176,15 @@ impl IntoRoute for StaticFiles {
 
 #[doc(hidden)]
 pub struct StaticFilesRoute {
-	uri: &'static str,
-	path: &'static str,
+	uri: Cow<'static, str>,
+	path: Cow<'static, str>,
 	caching: Option<Caching>
 }
 
 impl Route for StaticFilesRoute {
 	fn check(&self, header: &RequestHeader) -> bool {
 		header.method() == &Method::GET &&
-		header.uri().path().starts_with(self.uri)
+		header.uri().path().starts_with(&*self.uri)
 	}
 
 	fn validate_data(&self, _data: &Data) {}
@@ -139,7 +194,7 @@ impl Route for StaticFilesRoute {
 		req: &'a mut Request,
 		_: &'a Data
 	) -> PinnedFuture<'a, crate::Result<Response>> {
-		let uri = self.uri;
+		let uri = &self.uri;
 		let caching = self.caching.clone();
 
 		PinnedFuture::new(async move {
@@ -154,7 +209,7 @@ impl Route for StaticFilesRoute {
 				.map_err(|e| Error::new(ClientErrorKind::BadRequest, e))?;
 
 			// build full pathbuf
-			let path_buf = Path::new(self.path).join(path_buf);
+			let path_buf = Path::new(&*self.path).join(path_buf);
 
 			tracing::info!("trying to serve {:?}", path_buf);
 
@@ -205,8 +260,61 @@ impl IntoRoute for StaticFile {
 
 	fn into_route(self) -> StaticFileRoute {
 		StaticFileRoute {
-			uri: self.uri,
-			path: self.path,
+			uri: self.uri.into(),
+			path: self.path.into(),
+			caching: self.caching.into()
+		}
+	}
+}
+
+/// Static get handler which servers/returns a file.
+/// 
+/// ## Example
+/// ```
+/// # use fire_http as fire;
+/// use fire::fs::StaticFileOwned;
+///
+/// #[tokio::main]
+/// async fn main() {
+/// 	let mut server = fire::build("127.0.0.1:0").await.unwrap();
+/// 	server.add_route(
+/// 		StaticFileOwned::new("/files/file".into(), "./www/file".into())
+/// 	);
+/// }
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StaticFileOwned {
+	uri: String,
+	path: String,
+	caching: CachingBuilder
+}
+
+impl StaticFileOwned {
+	/// Creates a `StaticFile` with Default caching settings
+	pub const fn new(uri: String, path: String) -> Self {
+		Self { uri, path, caching: CachingBuilder::Default }
+	}
+
+	pub const fn no_cache(uri: String, path: String) -> Self {
+		Self { uri, path, caching: CachingBuilder::None }
+	}
+
+	pub const fn cache_with_age(
+		uri: String,
+		path: String,
+		max_age: Duration
+	) -> Self {
+		Self { uri, path, caching: CachingBuilder::MaxAge(max_age) }
+	}
+}
+
+impl IntoRoute for StaticFileOwned {
+	type IntoRoute = StaticFileRoute;
+
+	fn into_route(self) -> StaticFileRoute {
+		StaticFileRoute {
+			uri: self.uri.into(),
+			path: self.path.into(),
 			caching: self.caching.into()
 		}
 	}
@@ -214,15 +322,15 @@ impl IntoRoute for StaticFile {
 
 #[doc(hidden)]
 pub struct StaticFileRoute {
-	uri: &'static str,
-	path: &'static str,
+	uri: Cow<'static, str>,
+	path: Cow<'static, str>,
 	caching: Option<Caching>
 }
 
 impl Route for StaticFileRoute {
 	fn check(&self, header: &RequestHeader) -> bool {
 		header.method() == &Method::GET &&
-		check_static(header.uri().path(), self.uri)
+		check_static(header.uri().path(), &*self.uri)
 	}
 
 	fn validate_data(&self, _data: &Data) {}
@@ -232,11 +340,8 @@ impl Route for StaticFileRoute {
 		req: &'a mut Request,
 		_: &'a Data
 	) -> PinnedFuture<'a, crate::Result<Response>> {
-		let path = self.path;
-		let caching = self.caching.clone();
-
 		PinnedFuture::new(async move {
-			serve_file(path, &req, caching).await
+			serve_file(&*self.path, &req, self.caching.clone()).await
 				.map_err(Error::from_client_io)
 		})
 	}

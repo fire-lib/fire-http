@@ -36,7 +36,7 @@ pub trait Route: Send + Sync {
 /// assert!(!check_static("/request/uri//", "/request/uri"));
 /// assert!(!check_static("/request/uri/more", "/request/uri"));
 /// ```
-pub fn check_static(uri_path: &str, s: &'static str) -> bool {
+pub fn check_static(uri_path: &str, s: &str) -> bool {
 	uri_path == s ||
 	(
 		// we don't want to expand /
