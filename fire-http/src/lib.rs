@@ -48,6 +48,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use tokio::net::ToSocketAddrs;
+use tokio::task::JoinHandle;
 
 pub use types;
 pub use types::{Request, Response, Body, header, body};
@@ -159,6 +160,16 @@ impl FireBuilder {
 	pub async fn ignite(self) -> Result<()> {
 		let fire = self.build().await?;
 		fire.ignite().await
+	}
+
+	/// Ignites the fire, and spawns it on a new tokio task.
+	///
+	/// ## Note
+	/// Under normal conditions this task should run forever.
+	pub async fn ignite_task(self) -> JoinHandle<()> {
+		tokio::spawn(async move {
+			self.ignite().await.unwrap()
+		})
 	}
 
 	/// Creates a tower service which can be used to build a manual hyper
