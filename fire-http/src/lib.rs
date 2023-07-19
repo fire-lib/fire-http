@@ -166,7 +166,7 @@ impl FireBuilder {
 	///
 	/// ## Note
 	/// Under normal conditions this task should run forever.
-	pub async fn ignite_task(self) -> JoinHandle<()> {
+	pub fn ignite_task(self) -> JoinHandle<()> {
 		tokio::spawn(async move {
 			self.ignite().await.unwrap()
 		})
