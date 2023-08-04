@@ -1,3 +1,5 @@
+/// This is unstable
+
 mod graphiql;
 
 use crate::{Request, Response, Error, Data, Body};
@@ -5,6 +7,8 @@ use crate::header::{self, RequestHeader, Method, StatusCode, Mime};
 use crate::routes::Route;
 use crate::util::PinnedFuture;
 use crate::error::{ClientErrorKind};
+
+use std::any::{Any, TypeId};
 
 use juniper::{
 	RootNode, GraphQLType, GraphQLTypeAsync, GraphQLSubscriptionType,
@@ -46,44 +50,61 @@ impl Route for GraphiQl {
 	}
 }
 
+pub struct GraphQlContext {
+	data: Data,
+	request_header: RequestHeader
+}
+
+impl GraphQlContext {
+	// Gets data or RequestHeader
+	pub fn get<D>(&self) -> Option<&D>
+	where D: Any {
+		if TypeId::of::<D>() == TypeId::of::<RequestHeader>() {
+			<dyn Any>::downcast_ref(&self.request_header)
+		} else {
+			self.data.get()
+		}
+	}
+}
+
+impl juniper::Context for GraphQlContext {}
+
+
 /// This only supports POST requests
-pub struct GraphQl<Ctx, Q, M, Sub, S>
+pub struct GraphQl<Q, M, Sub, S>
 where
-	Q: GraphQLType<S, Context=Ctx>,
-	M: GraphQLType<S, Context=Ctx>,
-	Sub: GraphQLType<S, Context=Ctx>,
+	Q: GraphQLType<S, Context=GraphQlContext>,
+	M: GraphQLType<S, Context=GraphQlContext>,
+	Sub: GraphQLType<S, Context=GraphQlContext>,
 	S: ScalarValue
 {
 	uri: &'static str,
-	root_node: RootNode<'static, Q, M, Sub, S>,
-	context: Ctx
+	root_node: RootNode<'static, Q, M, Sub, S>
 }
 
-impl<Ctx, Q, M, Sub, S> GraphQl<Ctx, Q, M, Sub, S>
+impl<Q, M, Sub, S> GraphQl<Q, M, Sub, S>
 where
-	Q: GraphQLType<S, Context=Ctx>,
-	M: GraphQLType<S, Context=Ctx>,
-	Sub: GraphQLType<S, Context=Ctx>,
+	Q: GraphQLType<S, Context=GraphQlContext>,
+	M: GraphQLType<S, Context=GraphQlContext>,
+	Sub: GraphQLType<S, Context=GraphQlContext>,
 	S: ScalarValue
 {
 	pub fn new(
 		uri: &'static str,
-		root_node: RootNode<'static, Q, M, Sub, S>,
-		context: Ctx
+		root_node: RootNode<'static, Q, M, Sub, S>
 	) -> Self {
-		Self { uri, root_node, context }
+		Self { uri, root_node }
 	}
 }
 
-impl<Ctx, Q, M, Sub, S> Route for GraphQl<Ctx, Q, M, Sub, S>
+impl<Q, M, Sub, S> Route for GraphQl<Q, M, Sub, S>
 where
-	Q: GraphQLTypeAsync<S, Context=Ctx> + Send,
+	Q: GraphQLTypeAsync<S, Context=GraphQlContext> + Send,
 	Q::TypeInfo: Send + Sync,
-	M: GraphQLTypeAsync<S, Context=Ctx> + Send,
+	M: GraphQLTypeAsync<S, Context=GraphQlContext> + Send,
 	M::TypeInfo: Send + Sync,
-	Sub: GraphQLSubscriptionType<S, Context=Ctx> + Send,
+	Sub: GraphQLSubscriptionType<S, Context=GraphQlContext> + Send,
 	Sub::TypeInfo: Send + Sync,
-	Ctx: Send + Sync,
 	S: ScalarValue + Send + Sync
 {
 	fn check(&self, header: &RequestHeader) -> bool {
@@ -96,14 +117,14 @@ where
 	fn call<'a>(
 		&'a self,
 		req: &'a mut Request,
-		_: &'a Data
+		data: &'a Data
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		PinnedFuture::new(async move {
 			// get content-type of request
 			let content_type = req.header().value(header::CONTENT_TYPE)
 				.unwrap_or("");
 
-			let req: GraphQLBatchRequest<S> = match content_type {
+			let gql_req: GraphQLBatchRequest<S> = match content_type {
 				"application/json" => {
 					// read json
 					req.deserialize().await?
@@ -119,7 +140,11 @@ where
 				_ => return Err(ClientErrorKind::BadRequest.into())
 			};
 
-			let res = req.execute(&self.root_node, &self.context).await;
+			let ctx = GraphQlContext {
+				data: data.clone(),
+				request_header: req.header().clone()
+			};
+			let res = gql_req.execute(&self.root_node, &ctx).await;
 
 			let mut resp = Response::builder()
 				.content_type(Mime::JSON);

@@ -1,8 +1,8 @@
 [package]
 name = "fire-http"
 description = "Http async library based on hyper and tokio"
-version = "0.3.12"
-authors = ["Sören Meier <info@s-me.ch>"]
+version = "0.3.13"
+authors = ["Sören Meier <info@soerenmeier.ch>"]
 repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -17,6 +17,7 @@ fs = ["tokio/fs", "dep:percent-encoding", "dep:rand"]
 http1 = ["hyper/http1"]
 http2 = ["hyper/http2"]
 ws = ["dep:tokio-tungstenite", "dep:futures-util", "dep:base64", "dep:sha-1", "codegen/ws"]
+## GraphQl is unstable
 graphql = ["json", "dep:juniper"]
 ## Trace logging is only enabled with this feature
 trace = []
