@@ -21,7 +21,9 @@ use bytes::Bytes;
 
 #[derive(Debug, Clone)]
 pub struct Range {
+	/// zero index and inclusive
 	pub start: usize,
+	/// zero index and inclusive
 	pub end: Option<usize>
 }
 
@@ -158,6 +160,7 @@ impl std::error::Error for RangeIncorrect {}
 
 // TODO NEED TO CHANGE u64
 // A File which streams a range
+#[derive(Debug)]
 struct FixedFile {
 	file: fs::File,
 	remaining: u64
@@ -184,26 +187,38 @@ impl io::AsyncRead for FixedFile {
 		}
 
 		// take a max amount of buffer to not write to much
-		let mut buf = buf.take(self.remaining.try_into().unwrap_or(usize::MAX));
-		debug_assert!(buf.filled().is_empty());
+		let (initialized, filled) = {
+			let mut buf = buf.take(
+				self.remaining.try_into()
+					.unwrap_or(usize::MAX)
+			);
+			debug_assert!(buf.filled().is_empty());
 
-		let res = Pin::new(&mut self.file).poll_read(cx, &mut buf);
-		match res {
-			Poll::Ready(Ok(_)) => {},
-			Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
-			Poll::Pending => return Poll::Pending
+			let res = Pin::new(&mut self.file).poll_read(cx, &mut buf);
+			match res {
+				Poll::Ready(Ok(())) => {},
+				Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+				Poll::Pending => return Poll::Pending
+			}
+
+			(buf.initialized().len(), buf.filled().len())
+		};
+
+		// this is safe since take returns a ReadBuf and it only returns
+		// bytes initializes that are.
+		unsafe {
+			buf.assume_init(buf.filled().len() + initialized);
 		}
+		buf.advance(filled);
 
-		let read = buf.filled().len();
-
-		if read == 0 {
+		if filled == 0 {
 			return Poll::Ready(Err(io::Error::new(
 				io::ErrorKind::UnexpectedEof,
 				"The file is to short"
 			)))
 		}
 
-		self.remaining = self.remaining.checked_sub(read as u64).unwrap();
+		self.remaining = self.remaining.checked_sub(filled as u64).unwrap();
 
 		Poll::Ready(Ok(()))
 	}
