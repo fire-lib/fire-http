@@ -14,7 +14,7 @@ const MIMES: &[(&str, bool, &[&str], &[&str])] = &[
 	// text
 	("TEXT", true, &["text/plain"], &["txt"]),
 	("HTML", true, &["text/html"], &["html"]),
-	("JS", true, &["application/javascript"], &["js"]),
+	("JS", true, &["application/javascript"], &["js", "mjs", "cjs"]),
 	("CSS", true, &["text/css"], &["css"]),
 	("JSON", true, &["application/json"], &["json"]),
 	("CSV", true, &["text/csv"], &["csv"]),
