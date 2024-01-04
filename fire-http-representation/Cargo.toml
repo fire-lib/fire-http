@@ -7,7 +7,7 @@ repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 categories = ["web-programming"]
-rust-version = "1.64"
+rust-version = "1.67"
 
 [features]
 json = ["serde", "serde_json"]
