@@ -79,7 +79,8 @@ impl Read for InnerSync {
 			Self::Bytes(b) if b.is_empty() => Ok(0),
 			Self::Bytes(b) => {
 				let read = buf.len().min(b.len());
-				buf[..read].copy_from_slice(&b[..read]);
+				let r = b.split_to(read);
+				buf[..read].copy_from_slice(&r);
 				Ok(read)
 			},
 			Self::SyncReader(r) => r.read(buf)

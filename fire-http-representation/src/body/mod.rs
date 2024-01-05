@@ -308,3 +308,33 @@ mod tests {
 		is_sync::<Body>();
 	}
 }
+
+#[cfg(all(test, feature = "json"))]
+mod json_tests {
+	use super::*;
+	use serde::{Serialize, Deserialize};
+
+	#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+	enum SomeEnum {
+		Abc(String)
+	}
+
+	#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+	struct Struct1 {
+		some_data: String,
+		some_enum: SomeEnum
+	}
+
+	#[tokio::test]
+	async fn test_serde() {
+		let s1 = Struct1 {
+			some_data: "test".into(),
+			some_enum: SomeEnum::Abc("test2".into())
+		};
+
+		let body = Body::serialize(&s1).unwrap();
+		let v: Struct1 = body.deserialize().await.unwrap();
+
+		assert_eq!(s1, v);
+	}
+}
