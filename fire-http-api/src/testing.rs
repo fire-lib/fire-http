@@ -39,11 +39,24 @@ impl FirePitApi {
 		R::Error: DeserializeOwned + Send + 'static,
 		R::Response: Send + 'static
 	{
+		self.request_with_header(req, HeaderValues::new()).await
+	}
+
+	pub async fn request_with_header<R>(
+		&self,
+		req: &R,
+		header: HeaderValues
+	) -> Result<R::Response, R::Error>
+	where
+		R: crate::Request,
+		R::Error: DeserializeOwned + Send + 'static,
+		R::Response: Send + 'static
+	{
 		let mut header = RequestHeader {
 			address: "127.0.0.0:0".parse().unwrap(),
 			method: R::METHOD,
 			uri: R::PATH.parse().unwrap(),
-			values: HeaderValues::new()
+			values: header
 		};
 		header.values.insert(
 			header::CONTENT_TYPE,
