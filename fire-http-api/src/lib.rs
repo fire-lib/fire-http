@@ -9,6 +9,8 @@ mod request;
 #[cfg(feature = "stream")]
 #[cfg_attr(docsrs, doc(cfg(feature = "feature")))]
 pub mod stream;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 
 pub use error::ApiError;
 pub use request::{Request, Method};
