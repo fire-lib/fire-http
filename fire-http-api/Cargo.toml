@@ -15,6 +15,10 @@ stream = ["fire/ws", "codegen/stream"]
 trace = []
 testing = []
 
+[[test]]
+name = "basic"
+required-features = ["testing"]
+
 [dependencies]
 serde = "1.0"
 fire = { package = "fire-http", version = "0.3", path = "../fire-http", features = ["json"] }
