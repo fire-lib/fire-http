@@ -2,8 +2,8 @@ use crate::error::ApiError;
 
 use serde::de::DeserializeOwned;
 
-use fire::{Data, Body, FirePit, Error};
-use fire::header::{self, RequestHeader, HeaderValues, StatusCode, ContentType, Mime};
+use fire::{Data, Body, FirePit, Error, Request, Response};
+use fire::header::{HeaderValues, StatusCode, Mime};
 
 
 pub struct FirePitApi {
@@ -25,8 +25,9 @@ impl FirePitApi {
 	/// 
 	/// Returns None if no route was found matching the request.
 	pub async fn route(
-		&self, req: &mut fire::Request
-	) -> Option<Result<fire::Response, Error>> {
+		&self,
+		req: &mut Request
+	) -> Option<Result<Response, Error>> {
 		self.inner.route(req).await
 	}
 
@@ -52,20 +53,26 @@ impl FirePitApi {
 		R::Error: DeserializeOwned + Send + 'static,
 		R::Response: Send + 'static
 	{
-		let mut header = RequestHeader {
-			address: "127.0.0.0:0".parse().unwrap(),
-			method: R::METHOD,
-			uri: R::PATH.parse().unwrap(),
-			values: header
-		};
-		header.values.insert(
-			header::CONTENT_TYPE,
-			ContentType::from(Mime::JSON)
-		);
+		let mut raw_req = Request::builder(R::PATH.parse().unwrap())
+			.method(R::METHOD);
+		*raw_req.values_mut() = header;
+		let mut req = raw_req.content_type(Mime::JSON)
+			.body(Body::serialize(req).unwrap())
+			.build();
 
-		let mut req = fire::Request::new(header, Body::serialize(req).unwrap());
+		self.request_raw::<R>(&mut req).await
+	}
 
-		let mut resp = self.route(&mut req).await.unwrap()
+	pub async fn request_raw<R>(
+		&self,
+		req: &mut Request
+	) -> Result<R::Response, R::Error>
+	where
+		R: crate::Request,
+		R::Error: DeserializeOwned + Send + 'static,
+		R::Response: Send + 'static
+	{
+		let mut resp = self.route(req).await.unwrap()
 			.map_err(|e| R::Error::request(e.to_string()))?;
 
 		if resp.header().status_code() != &StatusCode::OK {
