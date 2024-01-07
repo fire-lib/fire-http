@@ -1,4 +1,7 @@
-use crate::header::RequestHeader;
+mod builder;
+pub use builder::RequestBuilder;
+
+use crate::header::{RequestHeader, Uri};
 #[cfg(feature = "json")]
 use crate::header::CONTENT_TYPE;
 use crate::body::Body;
@@ -17,6 +20,11 @@ impl Request {
 	/// Creates a new `Request`.
 	pub fn new(header: RequestHeader, body: Body) -> Self {
 		Self { header, body }
+	}
+
+	/// Creates a new `Request` with a builder.
+	pub fn builder(uri: Uri) -> RequestBuilder {
+		RequestBuilder::new(uri)
 	}
 
 	/// Takes the body replacing it with an empty one.
