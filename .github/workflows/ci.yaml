@@ -1,4 +1,4 @@
-on: 
+on:
   push:
     branches: [master]
   pull_request:
@@ -7,7 +7,7 @@ on:
 env:
   RUSTFLAGS: -Dwarnings
   # change manually in matrix
-  rust_min: 1.67.0
+  rust_min: 1.69.0
 
 jobs:
   test:
@@ -18,7 +18,7 @@ jobs:
         rust:
           - stable
           - nightly
-          - 1.67.0
+          - 1.69.0
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
@@ -34,7 +34,7 @@ jobs:
         rust:
           - stable
           - nightly
-          - 1.67.0
+          - 1.69.0
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
@@ -50,7 +50,7 @@ jobs:
         rust:
           - stable
           - nightly
-          - 1.67.0
+          - 1.69.0
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
