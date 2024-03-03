@@ -1,13 +1,13 @@
 use fire_http as fire;
 
-use fire::{Request, Response, Data, get};
-use fire::routes::Catcher;
-use fire::header::{StatusCode, RequestHeader, ResponseHeader};
-use fire::util::PinnedFuture;
 use fire::header::{
-	Method, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
-	ACCESS_CONTROL_ALLOW_HEADERS, X_XSS_PROTECTION
+	Method, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS,
+	ACCESS_CONTROL_ALLOW_ORIGIN, X_XSS_PROTECTION,
 };
+use fire::header::{RequestHeader, ResponseHeader, StatusCode};
+use fire::routes::Catcher;
+use fire::util::PinnedFuture;
+use fire::{get, Data, Request, Response};
 
 #[get("/")]
 fn hello_world() -> &'static str {
@@ -25,7 +25,7 @@ impl Catcher for CorsHeaders {
 		&'a self,
 		req: &'a mut Request,
 		res: &'a mut Response,
-		_data: &'a Data
+		_data: &'a Data,
 	) -> PinnedFuture<'a, fire::Result<()>> {
 		let values = &mut res.header.values;
 
@@ -44,10 +44,10 @@ impl Catcher for CorsHeaders {
 	}
 }
 
-
 #[tokio::main]
 async fn main() {
-	let mut server = fire::build("0.0.0.0:3000").await
+	let mut server = fire::build("0.0.0.0:3000")
+		.await
 		.expect("Address could not be parsed");
 
 	server.add_route(hello_world);

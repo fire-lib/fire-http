@@ -13,7 +13,7 @@ pub mod stream;
 pub mod testing;
 
 pub use error::ApiError;
-pub use request::{Request, Method};
+pub use request::{Method, Request};
 
 #[doc(hidden)]
 pub use fire;

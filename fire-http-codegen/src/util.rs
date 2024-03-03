@@ -1,29 +1,28 @@
-use proc_macro2::{Span, TokenStream, Ident};
-use syn::{Result, Signature, FnArg, Type, punctuated, Error, TypeReference};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
+use syn::{punctuated, Error, FnArg, Result, Signature, Type, TypeReference};
 
 use proc_macro_crate::{crate_name, FoundCrate};
 
-
 pub(crate) fn validate_signature(sig: &Signature) -> Result<()> {
 	if let Some(con) = &sig.constness {
-		return Err(Error::new(con.span, "const not allowed"))
+		return Err(Error::new(con.span, "const not allowed"));
 	}
 
 	if let Some(unsf) = &sig.unsafety {
-		return Err(Error::new(unsf.span, "unsafe not allowed"))
+		return Err(Error::new(unsf.span, "unsafe not allowed"));
 	}
 
 	if let Some(abi) = &sig.abi {
-		return Err(Error::new_spanned(abi, "abi not allowed"))
+		return Err(Error::new_spanned(abi, "abi not allowed"));
 	}
 
 	if !sig.generics.params.is_empty() {
-		return Err(Error::new_spanned(&sig.generics, "generics not allowed"))
+		return Err(Error::new_spanned(&sig.generics, "generics not allowed"));
 	}
 
 	if let Some(variadic) = &sig.variadic {
-		return Err(Error::new_spanned(&variadic, "variadic not allowed"))
+		return Err(Error::new_spanned(&variadic, "variadic not allowed"));
 	}
 
 	Ok(())
@@ -33,14 +32,14 @@ pub(crate) fn validate_signature(sig: &Signature) -> Result<()> {
 pub(crate) fn ref_type(ty: &Type) -> Option<&TypeReference> {
 	match ty {
 		Type::Reference(r) => Some(r),
-		_ => None
+		_ => None,
 	}
 }
 
 #[allow(dead_code)]
 pub(crate) fn validate_inputs(
 	inputs: punctuated::Iter<'_, FnArg>,
-	mut_ref_allowed: bool
+	mut_ref_allowed: bool,
 ) -> Result<Vec<Box<Type>>> {
 	let mut v = vec![];
 
@@ -48,20 +47,23 @@ pub(crate) fn validate_inputs(
 		let ty = match fn_arg {
 			FnArg::Receiver(r) => {
 				return Err(Error::new_spanned(r, "self not allowed"))
-			},
-			FnArg::Typed(t) => t.ty.clone()
+			}
+			FnArg::Typed(t) => t.ty.clone(),
 		};
 
 		if let Some(reff) = ref_type(&ty) {
 			if !mut_ref_allowed {
 				if let Some(mu) = reff.mutability {
-					return Err(Error::new_spanned(mu, "&mut not supported"))
+					return Err(Error::new_spanned(mu, "&mut not supported"));
 				}
 			}
 
 			if let Some(lifetime) = &reff.lifetime {
-				return Err(Error::new_spanned(lifetime, "lifetimes not \
-					supported"))
+				return Err(Error::new_spanned(
+					lifetime,
+					"lifetimes not \
+					supported",
+				));
 			}
 		}
 

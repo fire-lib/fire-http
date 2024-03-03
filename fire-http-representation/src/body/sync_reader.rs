@@ -1,4 +1,4 @@
-use super::{size_limit_reached, Constraints, BodyAsyncReader, BoxedSyncRead};
+use super::{size_limit_reached, BodyAsyncReader, BoxedSyncRead, Constraints};
 
 use std::io;
 use std::io::Read;
@@ -8,33 +8,29 @@ use tokio_util::io::SyncIoBridge;
 
 use bytes::Bytes;
 
-
 /// ## Panics
 /// If not read within `task::spawn_blocking`.
 pub struct BodySyncReader {
-	inner: Inner
+	inner: Inner,
 }
 
 impl BodySyncReader {
 	pub(super) fn new(inner: super::Inner, constraints: Constraints) -> Self {
 		let inner = match inner {
 			super::Inner::Empty => Inner::Empty,
-			super::Inner::Bytes(b) => {
-				Inner::Sync(ConstrainedSyncReader::new(
-					InnerSync::Bytes(b),
-					constraints
-				))
-			},
+			super::Inner::Bytes(b) => Inner::Sync(ConstrainedSyncReader::new(
+				InnerSync::Bytes(b),
+				constraints,
+			)),
 			super::Inner::SyncReader(r) => {
 				Inner::Sync(ConstrainedSyncReader::new(
 					InnerSync::SyncReader(r),
-					constraints
+					constraints,
 				))
-			},
-			i => Inner::Async(SyncIoBridge::new(Box::pin(BodyAsyncReader::new(
-				i,
-				constraints
-			))))
+			}
+			i => Inner::Async(SyncIoBridge::new(Box::pin(
+				BodyAsyncReader::new(i, constraints),
+			))),
 		};
 
 		Self { inner }
@@ -55,7 +51,7 @@ impl Read for BodySyncReader {
 enum Inner {
 	Empty,
 	Sync(ConstrainedSyncReader<InnerSync>),
-	Async(SyncIoBridge<Pin<Box<BodyAsyncReader>>>)
+	Async(SyncIoBridge<Pin<Box<BodyAsyncReader>>>),
 }
 
 impl Read for Inner {
@@ -63,14 +59,14 @@ impl Read for Inner {
 		match self {
 			Self::Empty => Ok(0),
 			Self::Sync(r) => r.read(buf),
-			Self::Async(r) => r.read(buf)
+			Self::Async(r) => r.read(buf),
 		}
 	}
 }
 
 enum InnerSync {
 	Bytes(Bytes),
-	SyncReader(BoxedSyncRead)
+	SyncReader(BoxedSyncRead),
 }
 
 impl Read for InnerSync {
@@ -82,8 +78,8 @@ impl Read for InnerSync {
 				let r = b.split_to(read);
 				buf[..read].copy_from_slice(&r);
 				Ok(read)
-			},
-			Self::SyncReader(r) => r.read(buf)
+			}
+			Self::SyncReader(r) => r.read(buf),
 		}
 	}
 }
@@ -91,14 +87,14 @@ impl Read for InnerSync {
 /// Only using size constraint
 struct ConstrainedSyncReader<R> {
 	inner: R,
-	size_limit: Option<usize>
+	size_limit: Option<usize>,
 }
 
 impl<R> ConstrainedSyncReader<R> {
 	pub fn new(reader: R, constraints: Constraints) -> Self {
 		Self {
 			inner: reader,
-			size_limit: constraints.size
+			size_limit: constraints.size,
 		}
 	}
 }
@@ -110,7 +106,7 @@ impl<R: Read> Read for ConstrainedSyncReader<R> {
 		if let Some(size_limit) = &mut self.size_limit {
 			match size_limit.checked_sub(read) {
 				Some(ns) => *size_limit = ns,
-				None => return Err(size_limit_reached("sync reader to big"))
+				None => return Err(size_limit_reached("sync reader to big")),
 			}
 		}
 
@@ -120,7 +116,7 @@ impl<R: Read> Read for ConstrainedSyncReader<R> {
 
 pub(super) fn sync_reader_into_bytes(
 	r: BoxedSyncRead,
-	constraints: Constraints
+	constraints: Constraints,
 ) -> io::Result<Bytes> {
 	let mut reader = ConstrainedSyncReader::new(r, constraints);
 

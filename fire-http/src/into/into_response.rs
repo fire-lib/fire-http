@@ -1,8 +1,7 @@
-use crate::{Response, Body};
-use crate::header::{StatusCode, Mime};
+use crate::header::{Mime, StatusCode};
+use crate::{Body, Response};
 
 use bytes::Bytes;
-
 
 pub trait IntoResponse {
 	fn into_response(self) -> Response;

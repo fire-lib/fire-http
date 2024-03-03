@@ -1,18 +1,14 @@
-use crate::ApiArgs;
 use crate::route::generate_struct;
 use crate::util::{
-	fire_api_crate, validate_signature, validate_inputs, ref_type
+	fire_api_crate, ref_type, validate_inputs, validate_signature,
 };
+use crate::ApiArgs;
 
 use proc_macro2::TokenStream;
-use syn::{Result, ItemFn};
-use quote::{quote, format_ident};
+use quote::{format_ident, quote};
+use syn::{ItemFn, Result};
 
-
-pub(crate) fn expand(
-	args: ApiArgs,
-	item: ItemFn
-) -> Result<TokenStream> {
+pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 	let fire_api = fire_api_crate()?;
 	let fire = quote!(#fire_api::fire);
 	let stream_mod = quote!(#fire_api::stream);
@@ -22,7 +18,6 @@ pub(crate) fn expand(
 
 	// Box<Type>
 	let input_types = validate_inputs(item.sig.inputs.iter(), false)?;
-
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
@@ -50,11 +45,11 @@ pub(crate) fn expand(
 						#stream_mod::util::valid_stream_data_as_ref
 							::<#elem, #stream_ty>
 					)
-				},
+				}
 				None => quote!(
 					#stream_mod::util::valid_stream_data_as_owned
 						::<#ty, #stream_ty>
-				)
+				),
 			};
 
 			let error_msg = format!("could not find {}", quote!(#ty));
@@ -85,11 +80,7 @@ pub(crate) fn expand(
 
 	let handle_fn = {
 		let is_async = item.sig.asyncness.is_some();
-		let await_kw = if is_async {
-			quote!(.await)
-		} else {
-			quote!()
-		};
+		let await_kw = if is_async { quote!(.await) } else { quote!() };
 
 		let mut handler_args_vars = vec![];
 		let mut handler_args = vec![];
@@ -102,7 +93,7 @@ pub(crate) fn expand(
 						#stream_mod::util::get_stream_data_as_ref
 							::<#elem, #stream_ty>
 					)
-				},
+				}
 				None => {
 					quote!(
 						#stream_mod::util::get_stream_data_as_owned

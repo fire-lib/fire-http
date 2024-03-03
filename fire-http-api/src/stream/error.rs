@@ -3,7 +3,6 @@ use std::fmt;
 
 pub use serde_json::Error as JsonError;
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnrecoverableError(Cow<'static, str>);
 
@@ -28,7 +27,7 @@ impl fmt::Display for UnrecoverableError {
 #[derive(Debug)]
 pub enum StreamError {
 	Closed,
-	Json(JsonError)
+	Json(JsonError),
 }
 
 impl std::error::Error for StreamError {}

@@ -9,7 +9,6 @@ use super::HeaderValue;
 use std::fmt;
 use std::str::FromStr;
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Mime(MimeValue);
 
@@ -53,7 +52,7 @@ impl FromStr for Mime {
 pub enum ContentType {
 	None,
 	Known(Mime),
-	Unknown(String)
+	Unknown(String),
 }
 
 impl ContentType {
@@ -61,7 +60,7 @@ impl ContentType {
 		match self {
 			Self::Known(m) => m.0.as_str_with_maybe_charset(),
 			Self::Unknown(s) => &s,
-			Self::None => ""
+			Self::None => "",
 		}
 	}
 
@@ -92,7 +91,7 @@ impl From<String> for ContentType {
 	fn from(s: String) -> Self {
 		match Mime::from_str(&s) {
 			Ok(m) => Self::Known(m),
-			Err(_) => Self::Unknown(s)
+			Err(_) => Self::Unknown(s),
 		}
 	}
 }
@@ -101,7 +100,7 @@ impl<'a> From<&'a str> for ContentType {
 	fn from(s: &'a str) -> Self {
 		match Mime::from_str(s) {
 			Ok(m) => Self::Known(m),
-			Err(_) => Self::Unknown(s.to_string())
+			Err(_) => Self::Unknown(s.to_string()),
 		}
 	}
 }
@@ -114,8 +113,8 @@ impl TryFrom<ContentType> for HeaderValue {
 			ContentType::None => Ok(Self::from_static("")),
 			ContentType::Known(m) => {
 				Ok(Self::from_static(m.as_str_with_maybe_charset()))
-			},
-			ContentType::Unknown(s) => s.try_into()
+			}
+			ContentType::Unknown(s) => s.try_into(),
 		}
 	}
 }

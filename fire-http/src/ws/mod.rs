@@ -9,20 +9,18 @@ use tracing::warn;
 #[doc(hidden)]
 pub use hyper::upgrade;
 
-use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite;
+use tokio_tungstenite::WebSocketStream;
 use tungstenite::protocol::Role;
 
 // rexport
 use tungstenite::protocol::Message as ProtMessage;
 pub use tungstenite::{
-	error::Error,
-	protocol::CloseFrame,
-	protocol::frame::coding::CloseCode
+	error::Error, protocol::frame::coding::CloseCode, protocol::CloseFrame,
 };
 
-use futures_util::stream::StreamExt;
 use futures_util::sink::SinkExt;
+use futures_util::stream::StreamExt;
 
 pub trait LogWebSocketReturn: fmt::Debug {
 	fn should_log_error(&self) -> bool;
@@ -31,7 +29,7 @@ pub trait LogWebSocketReturn: fmt::Debug {
 impl<T, E> LogWebSocketReturn for Result<T, E>
 where
 	T: fmt::Debug,
-	E: fmt::Debug
+	E: fmt::Debug,
 {
 	fn should_log_error(&self) -> bool {
 		self.is_err()
@@ -46,30 +44,32 @@ impl LogWebSocketReturn for () {
 
 #[cfg(feature = "json")]
 macro_rules! try2 {
-	($e:expr) => (match $e {
-		Some(v) => v,
-		None => return Ok(None)
-	})
+	($e:expr) => {
+		match $e {
+			Some(v) => v,
+			None => return Ok(None),
+		}
+	};
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Message {
 	Text(String),
-	Binary(Vec<u8>)
+	Binary(Vec<u8>),
 }
 
 impl Message {
 	pub fn into_data(self) -> Vec<u8> {
 		match self {
 			Self::Text(t) => t.into(),
-			Self::Binary(b) => b
+			Self::Binary(b) => b,
 		}
 	}
 
 	pub fn to_text(&self) -> Result<&str, Utf8Error> {
 		match self {
 			Self::Text(t) => Ok(&t),
-			Self::Binary(b) => std::str::from_utf8(b)
+			Self::Binary(b) => std::str::from_utf8(b),
 		}
 	}
 }
@@ -102,39 +102,36 @@ impl From<Message> for ProtMessage {
 	fn from(m: Message) -> Self {
 		match m {
 			Message::Text(t) => Self::Text(t),
-			Message::Binary(b) => Self::Binary(b)
+			Message::Binary(b) => Self::Binary(b),
 		}
 	}
 }
 
-
 #[derive(Debug)]
 pub struct WebSocket {
-	inner: WebSocketStream<upgrade::Upgraded>
+	inner: WebSocketStream<upgrade::Upgraded>,
 }
 
 impl WebSocket {
-
 	pub async fn new(upgraded: upgrade::Upgraded) -> Self {
 		Self {
 			inner: WebSocketStream::from_raw_socket(
 				upgraded,
 				Role::Server,
-				None
-			).await
+				None,
+			)
+			.await,
 		}
 	}
 
 	// used for tests
 	#[doc(hidden)]
-	pub fn from_raw(
-		inner: WebSocketStream<upgrade::Upgraded>
-	) -> Self {
+	pub fn from_raw(inner: WebSocketStream<upgrade::Upgraded>) -> Self {
 		Self { inner }
 	}
 
 	/// Handles Ping and Pong messages
-	/// 
+	///
 	/// never returns Error::ConnectionClose | Error::AlreadyClosed
 	pub async fn receive(&mut self) -> Result<Option<Message>, Error> {
 		// loop used to handle Message::Pong | Message::Ping
@@ -145,36 +142,43 @@ impl WebSocket {
 				Ok(Some(ProtMessage::Text(t))) => Ok(Some(Message::Text(t))),
 				Ok(Some(ProtMessage::Binary(b))) => {
 					Ok(Some(Message::Binary(b)))
-				},
+				}
 				Ok(Some(ProtMessage::Ping(d))) => {
 					// respond with a pong
 					self.inner.send(ProtMessage::Pong(d)).await?;
 					// then listen for a new message
-					continue
-				},
+					continue;
+				}
 				Ok(Some(ProtMessage::Pong(_))) => continue,
 				Ok(Some(ProtMessage::Close(_))) => Ok(None),
 				Ok(Some(ProtMessage::Frame(f))) => {
 					warn!("we received a websocket frame {:?}", f);
 					// Todod should we do something about this frame??
-					continue
-				},
-				Err(Error::ConnectionClosed) |
-				Err(Error::AlreadyClosed) => Ok(None),
-				Err(e) => Err(e)
+					continue;
+				}
+				Err(Error::ConnectionClosed) | Err(Error::AlreadyClosed) => {
+					Ok(None)
+				}
+				Err(e) => Err(e),
 			};
 		}
 	}
 
 	pub async fn send<M>(&mut self, msg: M) -> Result<(), Error>
-	where M: Into<Message> {
+	where
+		M: Into<Message>,
+	{
 		self.inner.send(msg.into().into()).await
 	}
 
 	pub async fn close(&mut self, code: CloseCode, reason: String) {
-		let _ = self.inner.send(ProtMessage::Close(Some(CloseFrame {
-			code, reason: reason.into()
-		}))).await;
+		let _ = self
+			.inner
+			.send(ProtMessage::Close(Some(CloseFrame {
+				code,
+				reason: reason.into(),
+			})))
+			.await;
 		let _ = self.inner.close(None).await;
 		// close is close
 		// don't mind if you could send close or not
@@ -188,7 +192,9 @@ impl WebSocket {
 	#[cfg(feature = "json")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
 	pub async fn deserialize<D>(&mut self) -> Result<Option<D>, JsonError>
-	where D: serde::de::DeserializeOwned {
+	where
+		D: serde::de::DeserializeOwned,
+	{
 		let msg = try2!(self.receive().await?).into_data();
 		serde_json::from_slice(&msg)
 			.map(|d| Some(d))
@@ -198,13 +204,16 @@ impl WebSocket {
 	/// calls serialize then send
 	#[cfg(feature = "json")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-	pub async fn serialize<S: ?Sized>(&mut self, value: &S) -> Result<(), JsonError>
-	where S: serde::Serialize {
+	pub async fn serialize<S: ?Sized>(
+		&mut self,
+		value: &S,
+	) -> Result<(), JsonError>
+	where
+		S: serde::Serialize,
+	{
 		let v = serde_json::to_string(value)?;
-		self.send(v).await
-			.map_err(|e| e.into())
+		self.send(v).await.map_err(|e| e.into())
 	}
-
 }
 
 #[cfg(feature = "json")]
@@ -217,7 +226,7 @@ mod json_error {
 	#[derive(Debug)]
 	pub enum JsonError {
 		ConnectionError(Error),
-		SerdeError(serde_json::Error)
+		SerdeError(serde_json::Error),
 	}
 
 	impl From<Error> for JsonError {
@@ -242,7 +251,7 @@ mod json_error {
 		fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 			match self {
 				Self::ConnectionError(e) => Some(e),
-				Self::SerdeError(e) => Some(e)
+				Self::SerdeError(e) => Some(e),
 			}
 		}
 	}

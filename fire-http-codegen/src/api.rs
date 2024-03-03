@@ -1,18 +1,14 @@
-use crate::ApiArgs;
 use crate::route::generate_struct;
 use crate::util::{
-	validate_signature, fire_api_crate, validate_inputs, ref_type
+	fire_api_crate, ref_type, validate_inputs, validate_signature,
 };
+use crate::ApiArgs;
 
-use proc_macro2::{TokenStream};
-use syn::{Result, ItemFn};
-use quote::{quote, format_ident};
+use proc_macro2::TokenStream;
+use quote::{format_ident, quote};
+use syn::{ItemFn, Result};
 
-
-pub(crate) fn expand(
-	args: ApiArgs,
-	item: ItemFn
-) -> Result<TokenStream> {
+pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 	let fire_api = fire_api_crate()?;
 	let fire = quote!(#fire_api::fire);
 	let req_ty = args.ty;
@@ -20,10 +16,7 @@ pub(crate) fn expand(
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
-	let input_types = validate_inputs(
-		item.sig.inputs.iter(),
-		true
-	)?;
+	let input_types = validate_inputs(item.sig.inputs.iter(), true)?;
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
@@ -55,18 +48,18 @@ pub(crate) fn expand(
 						#fire_api::util::valid_route_data_as_mut
 							::<#elem, #req_ty>
 					)
-				},
+				}
 				Some(reff) => {
 					let elem = &reff.elem;
 					quote!(
 						#fire_api::util::valid_route_data_as_ref
 							::<#elem, #req_ty>
 					)
-				},
+				}
 				None => quote!(
 					#fire_api::util::valid_route_data_as_owned
 						::<#ty, #req_ty>
-				)
+				),
 			};
 
 			asserts.push(quote!(
@@ -95,11 +88,7 @@ pub(crate) fn expand(
 
 	let call_fn = {
 		let is_async = item.sig.asyncness.is_some();
-		let await_kw = if is_async {
-			quote!(.await)
-		} else {
-			quote!()
-		};
+		let await_kw = if is_async { quote!(.await) } else { quote!() };
 
 		let mut handler_args_vars = vec![];
 		let mut handler_args = vec![];
@@ -112,18 +101,18 @@ pub(crate) fn expand(
 						#fire_api::util::get_route_data_as_mut
 							::<#elem, #req_ty>
 					)
-				},
+				}
 				Some(reff) => {
 					let elem = &reff.elem;
 					quote!(
 						#fire_api::util::get_route_data_as_ref
 							::<#elem, #req_ty>
 					)
-				},
+				}
 				None => quote!(
 					#fire_api::util::get_route_data_as_owned
 						::<#ty, #req_ty>
-				)
+				),
 			};
 
 			let var_name = format_ident!("handler_arg_{idx}");

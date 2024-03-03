@@ -1,36 +1,36 @@
-use crate::{Data, Request, Error};
+use crate::routes::Routes;
 use crate::server::HyperRequest;
 use crate::util::{
-	convert_hyper_req_to_fire_req, convert_fire_resp_to_hyper_resp
+	convert_fire_resp_to_hyper_resp, convert_hyper_req_to_fire_req,
 };
-use crate::routes::Routes;
+use crate::{Data, Error, Request};
 
-use std::net::SocketAddr;
 use std::convert::Infallible;
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use tracing::error;
 
+use types::body::BodyHttp;
 use types::header::StatusCode;
 use types::response::Response;
-use types::body::BodyHttp;
 
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 // same as page size
-const DEFAULT_REQUEST_SIZE_LIMIT: usize = 4096;// 4kb
+const DEFAULT_REQUEST_SIZE_LIMIT: usize = 4096; // 4kb
 
 #[derive(Debug)]
 pub(crate) struct RequestConfigs {
 	pub timeout: Duration,
 	// in bytes
-	pub size_limit: usize
+	pub size_limit: usize,
 }
 
 impl RequestConfigs {
 	pub fn new() -> Self {
 		Self {
 			timeout: DEFAULT_REQUEST_TIMEOUT,
-			size_limit: DEFAULT_REQUEST_SIZE_LIMIT
+			size_limit: DEFAULT_REQUEST_SIZE_LIMIT,
 		}
 	}
 
@@ -50,12 +50,16 @@ impl RequestConfigs {
 pub(crate) struct Wood {
 	data: Data,
 	routes: Routes,
-	configs: RequestConfigs
+	configs: RequestConfigs,
 }
 
 impl Wood {
 	pub fn new(data: Data, routes: Routes, configs: RequestConfigs) -> Self {
-		Self { data, routes, configs }
+		Self {
+			data,
+			routes,
+			configs,
+		}
 	}
 
 	pub fn routes(&self) -> &Routes {
@@ -74,7 +78,7 @@ impl Wood {
 pub(crate) async fn route_hyper(
 	wood: &Wood,
 	hyper_req: HyperRequest,
-	address: SocketAddr
+	address: SocketAddr,
 ) -> Result<hyper::Response<BodyHttp>, Infallible> {
 	let route_resp = route_hyper_req(wood, hyper_req, address).await;
 	let hyper_resp = convert_fire_resp_to_hyper_resp(route_resp);
@@ -84,7 +88,7 @@ pub(crate) async fn route_hyper(
 pub(crate) async fn route_hyper_req(
 	wood: &Wood,
 	mut hyper_req: HyperRequest,
-	address: SocketAddr
+	address: SocketAddr,
 ) -> Response {
 	// todo use a tracing span
 
@@ -99,8 +103,8 @@ pub(crate) async fn route_hyper_req(
 			Some(Err(e)) => {
 				error!("RawRoute returned an error {:?}", e);
 				Some(e.status_code().into())
-			},
-			None => None
+			}
+			None => None,
 		}
 	} else {
 		None
@@ -111,10 +115,10 @@ pub(crate) async fn route_hyper_req(
 		Ok(r) => r,
 		Err(e) => {
 			if let Some(resp) = resp {
-				return resp
+				return resp;
 			}
 			error!("Could not parse the hyper request {:?}", e);
-			return StatusCode::BAD_REQUEST.into()
+			return StatusCode::BAD_REQUEST.into();
 		}
 	};
 
@@ -125,14 +129,10 @@ pub(crate) async fn route_hyper_req(
 		match route(wood, &mut req).await {
 			Some(Ok(resp)) => resp,
 			Some(Err(e)) => {
-				error!(
-					"Route error: {:?} {:?}",
-					req.header().uri().path(),
-					e
-				);
+				error!("Route error: {:?} {:?}", req.header().uri().path(), e);
 				e.status_code().into()
-			},
-			None => StatusCode::NOT_FOUND.into()
+			}
+			None => StatusCode::NOT_FOUND.into(),
 		}
 	};
 
@@ -141,7 +141,7 @@ pub(crate) async fn route_hyper_req(
 	// check with catcher
 	for catcher in wood.routes().catchers() {
 		if !catcher.check(req.header(), resp.header()) {
-			continue
+			continue;
 		}
 
 		if let Err(e) = catcher.call(&mut req, &mut resp, wood.data()).await {
@@ -156,11 +156,14 @@ pub(crate) async fn route_hyper_req(
 
 pub(crate) async fn route(
 	wood: &Wood,
-	req: &mut Request
+	req: &mut Request,
 ) -> Option<Result<Response, Error>> {
 	// first response
-	let r = wood.routes().route(req.header())?
-		.call(req, wood.data()).await;
+	let r = wood
+		.routes()
+		.route(req.header())?
+		.call(req, wood.data())
+		.await;
 
 	Some(r)
 }

@@ -7,7 +7,9 @@ pub trait IntoRoute {
 }
 
 impl<R> IntoRoute for R
-where R: Route {
+where
+	R: Route,
+{
 	type IntoRoute = Self;
 
 	fn into_route(self) -> Self {

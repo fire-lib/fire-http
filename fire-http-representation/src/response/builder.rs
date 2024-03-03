@@ -1,18 +1,17 @@
 use super::Response;
 use crate::body::Body;
 use crate::header::{
-	ResponseHeader, StatusCode, ContentType, HeaderValues, HeaderValue,
-	values::IntoHeaderName, CONTENT_LENGTH
+	values::IntoHeaderName, ContentType, HeaderValue, HeaderValues,
+	ResponseHeader, StatusCode, CONTENT_LENGTH,
 };
 
 use std::fmt;
-
 
 /// A builder to create a `Response`.
 #[derive(Debug)]
 pub struct ResponseBuilder {
 	header: ResponseHeader,
-	body: Body
+	body: Body,
 }
 
 impl ResponseBuilder {
@@ -20,7 +19,7 @@ impl ResponseBuilder {
 	pub fn new() -> Self {
 		Self {
 			header: ResponseHeader::default(),
-			body: Body::new()
+			body: Body::new(),
 		}
 	}
 
@@ -33,25 +32,25 @@ impl ResponseBuilder {
 	/// Sets the content type.
 	pub fn content_type(
 		mut self,
-		content_type: impl Into<ContentType>
+		content_type: impl Into<ContentType>,
 	) -> Self {
 		self.header.content_type = content_type.into();
 		self
 	}
 
 	/// Sets a header value.
-	/// 
+	///
 	/// ## Note
 	/// Only ASCII characters are allowed, use
 	/// `self.values_mut().insert_encoded()` to allow any character.
-	/// 
+	///
 	/// ## Panics
 	/// If the value is not a valid `HeaderValue`.
 	pub fn header<K, V>(mut self, key: K, val: V) -> Self
 	where
 		K: IntoHeaderName,
 		V: TryInto<HeaderValue>,
-		V::Error: fmt::Debug
+		V::Error: fmt::Debug,
 	{
 		self.values_mut().insert(key, val);
 		self
@@ -79,5 +78,4 @@ impl ResponseBuilder {
 
 		Response::new(self.header, self.body)
 	}
-
 }

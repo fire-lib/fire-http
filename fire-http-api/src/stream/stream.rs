@@ -3,7 +3,7 @@
 use super::message::MessageKind;
 use crate::error::ApiError;
 
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 
 /// ## Note
 /// The names are in the perspective of a client so a StreamKind of Sender will
@@ -11,14 +11,14 @@ use serde::{Serialize, de::DeserializeOwned};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StreamKind {
 	Sender,
-	Receiver
+	Receiver,
 }
 
 impl StreamKind {
 	pub fn into_kind_message(self) -> MessageKind {
 		match self {
 			Self::Sender => MessageKind::SenderMessage,
-			Self::Receiver => MessageKind::ReceiverMessage
+			Self::Receiver => MessageKind::ReceiverMessage,
 		}
 	}
 }
@@ -26,12 +26,12 @@ impl StreamKind {
 impl From<MessageKind> for StreamKind {
 	fn from(m: MessageKind) -> Self {
 		match m {
-			MessageKind::SenderRequest |
-			MessageKind::SenderMessage |
-			MessageKind::SenderClose => Self::Sender,
-			MessageKind::ReceiverRequest |
-			MessageKind::ReceiverMessage |
-			MessageKind::ReceiverClose => Self::Receiver
+			MessageKind::SenderRequest
+			| MessageKind::SenderMessage
+			| MessageKind::SenderClose => Self::Sender,
+			MessageKind::ReceiverRequest
+			| MessageKind::ReceiverMessage
+			| MessageKind::ReceiverClose => Self::Receiver,
 		}
 	}
 }

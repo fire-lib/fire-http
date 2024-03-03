@@ -5,7 +5,7 @@ mod data;
 pub use data::Data;
 
 pub mod routes;
-use routes::{Routes, RawRoute, Route, Catcher};
+use routes::{Catcher, RawRoute, Route, Routes};
 
 #[macro_use]
 pub mod util;
@@ -14,7 +14,7 @@ pub mod into;
 use into::IntoRoute;
 
 pub mod error;
-pub use error::{Result, Error};
+pub use error::{Error, Result};
 
 mod server;
 use server::Server;
@@ -39,19 +39,19 @@ pub mod ws;
 pub mod graphql;
 
 pub mod service {
-	pub use crate::server::{MakeFireService, FireService};
+	pub use crate::server::{FireService, MakeFireService};
 }
 
-use std::net::SocketAddr;
-use std::time::Duration;
 use std::any::Any;
+use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use tokio::net::ToSocketAddrs;
 use tokio::task::JoinHandle;
 
 pub use types;
-pub use types::{Request, Response, Body, header, body};
+pub use types::{body, header, Body, Request, Response};
 
 pub use codegen::*;
 
@@ -66,21 +66,25 @@ pub struct FireBuilder {
 	data: Data,
 	routes: Routes,
 	configs: RequestConfigs,
-	show_startup_msg: bool
+	show_startup_msg: bool,
 }
 
 impl FireBuilder {
 	pub(crate) async fn new<A>(addr: A) -> Result<Self>
-	where A: ToSocketAddrs {
-		let addr = tokio::net::lookup_host(addr).await
+	where
+		A: ToSocketAddrs,
+	{
+		let addr = tokio::net::lookup_host(addr)
+			.await
 			.map_err(Error::from_server_error)?
-			.next().unwrap();
+			.next()
+			.unwrap();
 		Ok(Self {
 			addr,
 			data: Data::new(),
 			routes: Routes::new(),
 			configs: RequestConfigs::new(),
-			show_startup_msg: true
+			show_startup_msg: true,
 		})
 	}
 
@@ -90,20 +94,26 @@ impl FireBuilder {
 	}
 
 	pub fn add_data<D>(&mut self, data: D)
-	where D: Any + Send + Sync {
+	where
+		D: Any + Send + Sync,
+	{
 		self.data.insert(data);
 	}
 
 	/// Adds a `RawRoute` to the fire.
 	pub fn add_raw_route<R>(&mut self, route: R)
-	where R: RawRoute + 'static {
+	where
+		R: RawRoute + 'static,
+	{
 		route.validate_data(&self.data);
 		self.routes.push_raw(route)
 	}
 
 	/// Adds a `Route` to the fire.
 	pub fn add_route<R>(&mut self, route: R)
-	where R: IntoRoute + 'static {
+	where
+		R: IntoRoute + 'static,
+	{
 		let route = route.into_route();
 		route.validate_data(&self.data);
 		self.routes.push(route)
@@ -111,15 +121,17 @@ impl FireBuilder {
 
 	/// Adds a `Catcher` to the fire.
 	pub fn add_catcher<C>(&mut self, catcher: C)
-	where C: Catcher + 'static {
+	where
+		C: Catcher + 'static,
+	{
 		catcher.validate_data(&self.data);
 		self.routes.push_catcher(catcher)
 	}
 
 	/// Sets the request size limit. The default is 4 kilobytes.
-	/// 
+	///
 	/// This can be changed in every Route.
-	/// 
+	///
 	/// ## Panics
 	/// If the size is zero.
 	pub fn request_size_limit(&mut self, size_limit: usize) {
@@ -127,7 +139,7 @@ impl FireBuilder {
 	}
 
 	/// Sets the request timeout. The default is 60 seconds.
-	/// 
+	///
 	/// This can be changed in every Route.
 	pub fn request_timeout(&mut self, timeout: Duration) {
 		self.configs.timeout(timeout)
@@ -139,7 +151,7 @@ impl FireBuilder {
 	}
 
 	/// Binds to the address and prepares to serve requests.
-	/// 
+	///
 	/// You need to call ignite on the `Fire` so that it starts handling
 	/// requests.
 	pub async fn build(self) -> Result<Fire> {
@@ -148,13 +160,14 @@ impl FireBuilder {
 		let server = Server::bind(self.addr, wood.clone()).await?;
 
 		Ok(Fire {
-			wood, server,
-			show_startup_msg: self.show_startup_msg
+			wood,
+			server,
+			show_startup_msg: self.show_startup_msg,
 		})
 	}
 
 	/// Ignites the fire, which starts the server.
-	/// 
+	///
 	/// ## Note
 	/// Under normal conditions this function should run forever.
 	pub async fn ignite(self) -> Result<()> {
@@ -167,9 +180,7 @@ impl FireBuilder {
 	/// ## Note
 	/// Under normal conditions this task should run forever.
 	pub fn ignite_task(self) -> JoinHandle<()> {
-		tokio::spawn(async move {
-			self.ignite().await.unwrap()
-		})
+		tokio::spawn(async move { self.ignite().await.unwrap() })
 	}
 
 	/// Creates a tower service which can be used to build a manual hyper
@@ -185,7 +196,7 @@ impl FireBuilder {
 pub struct Fire {
 	wood: Arc<Wood>,
 	server: Server,
-	show_startup_msg: bool
+	show_startup_msg: bool,
 }
 
 impl Fire {
@@ -194,7 +205,9 @@ impl Fire {
 	}
 
 	pub fn pit(&self) -> FirePit {
-		FirePit { wood: self.wood.clone() }
+		FirePit {
+			wood: self.wood.clone(),
+		}
 	}
 
 	pub async fn ignite(self) -> Result<()> {
@@ -208,7 +221,7 @@ impl Fire {
 
 #[derive(Clone)]
 pub struct FirePit {
-	wood: Arc<Wood>
+	wood: Arc<Wood>,
 }
 
 impl FirePit {
@@ -217,11 +230,12 @@ impl FirePit {
 	}
 
 	/// Routes the request to normal routes and returns their result.
-	/// 
+	///
 	/// Useful for tests and niche applications.
-	/// 
+	///
 	/// Returns None if no route was found matching the request.
 	pub async fn route(&self, req: &mut Request) -> Option<Result<Response>> {
+		eprintln!("fire pit route {req:?}");
 		fire::route(&self.wood, req).await
 	}
 }

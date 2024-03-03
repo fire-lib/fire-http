@@ -1,25 +1,21 @@
-use crate::header::{RequestHeader, HeaderValues, Uri, HOST};
+use crate::header::{HeaderValues, RequestHeader, Uri, HOST};
 
 use std::net::SocketAddr;
 
 use hyper::http::uri::{Authority, Scheme};
 
-
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HeaderError {
 	NoHost,
 	HostInvalid,
-	Uri
+	Uri,
 }
-
 
 type Result<T> = std::result::Result<T, HeaderError>;
 
-
 pub fn convert_hyper_parts_to_fire_header(
 	parts: hyper::http::request::Parts,
-	address: SocketAddr
+	address: SocketAddr,
 ) -> Result<RequestHeader> {
 	let values = HeaderValues::from_inner(parts.headers);
 	let uri = fill_uri(parts.uri, &values)?;
@@ -28,7 +24,7 @@ pub fn convert_hyper_parts_to_fire_header(
 		address,
 		method: parts.method,
 		uri,
-		values
+		values,
 	})
 }
 
@@ -43,9 +39,8 @@ fn fill_uri(uri: Uri, headers: &HeaderValues) -> Result<Uri> {
 
 	parts.authority = Some(
 		Authority::try_from(host.as_bytes())
-			.map_err(|_| HeaderError::HostInvalid)?
+			.map_err(|_| HeaderError::HostInvalid)?,
 	);
 
-	Uri::from_parts(parts)
-		.map_err(|_| HeaderError::Uri)
+	Uri::from_parts(parts).map_err(|_| HeaderError::Uri)
 }

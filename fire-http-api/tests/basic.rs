@@ -1,20 +1,19 @@
 use fire_http_api as fire_api;
 
-use fire_api::{api, Request, Method};
-use fire_api::error::{Error as ErrorTrait, ApiError, StatusCode};
+use fire_api::error::{ApiError, Error as ErrorTrait, StatusCode};
 use fire_api::testing::FirePitApi;
+use fire_api::{api, Method, Request};
 
 use std::fmt;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use tracing_test::traced_test;
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Error {
 	Internal(String),
-	Request(String)
+	Request(String),
 }
 
 impl ApiError for Error {
@@ -29,7 +28,7 @@ impl ApiError for Error {
 	fn status_code(&self) -> StatusCode {
 		match self {
 			Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-			Self::Request(_) => StatusCode::BAD_REQUEST
+			Self::Request(_) => StatusCode::BAD_REQUEST,
 		}
 	}
 }
@@ -40,18 +39,16 @@ impl fmt::Display for Error {
 	}
 }
 
-
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestReq {
-	hi: String
+	hi: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestResp {
-	ho: String
+	ho: String,
 }
 
 impl Request for TestReq {

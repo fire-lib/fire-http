@@ -1,6 +1,6 @@
-use fire_http_codegen as codegen;
-use fire::Request;
 use codegen::get;
+use fire::Request;
+use fire_http_codegen as codegen;
 
 struct MyType;
 

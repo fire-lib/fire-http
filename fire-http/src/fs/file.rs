@@ -1,34 +1,39 @@
-use crate::{Response, Body};
 use crate::header::{Mime, CONTENT_LENGTH};
 use crate::into::IntoResponse;
+use crate::{Body, Response};
 
-use std::path::Path;
 use std::convert::AsRef;
+use std::path::Path;
 
-use tokio::{io, fs};
+use tokio::{fs, io};
 
 use bytes::Bytes;
-
 
 pub struct File {
 	file: fs::File,
 	mime_type: Mime,
-	size: usize
+	size: usize,
 }
 
 impl File {
 	pub fn new<M>(file: fs::File, mime_type: M, size: usize) -> Self
-	where M: Into<Mime> {
-		Self { file, mime_type: mime_type.into(), size }
+	where
+		M: Into<Mime>,
+	{
+		Self {
+			file,
+			mime_type: mime_type.into(),
+			size,
+		}
 	}
 
 	/// if the path is a directory
 	/// returns io::Error NotFound
 	pub async fn open<P>(path: P) -> io::Result<Self>
-	where P: AsRef<Path> {
-		let extension = path.as_ref()
-			.extension()
-			.and_then(|f| f.to_str());
+	where
+		P: AsRef<Path>,
+	{
+		let extension = path.as_ref().extension().and_then(|f| f.to_str());
 
 		let mime_type = extension
 			.and_then(Mime::from_extension)
@@ -41,15 +46,18 @@ impl File {
 		if !metadata.is_file() {
 			return Err(io::Error::new(
 				io::ErrorKind::NotFound,
-				"expected file found folder"
-			))
+				"expected file found folder",
+			));
 		}
 
 		let size = metadata.len() as usize;
 
-		Ok(Self { file, mime_type, size })
+		Ok(Self {
+			file,
+			mime_type,
+			size,
+		})
 	}
-
 }
 
 impl IntoResponse for File {
@@ -64,9 +72,11 @@ impl IntoResponse for File {
 
 pub fn serve_memory_file(
 	path: &'static str,
-	bytes: &'static [u8]
+	bytes: &'static [u8],
 ) -> io::Result<Response> {
-	let mime_type = path.rsplit('.').next()
+	let mime_type = path
+		.rsplit('.')
+		.next()
 		.and_then(Mime::from_extension)
 		.unwrap_or(Mime::BINARY);
 

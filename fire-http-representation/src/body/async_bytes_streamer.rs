@@ -1,16 +1,16 @@
 use super::{
-	size_limit_reached, timed_out, Constraints, BoxedSyncRead, PinnedAsyncRead,
-	PinnedAsyncBytesStream, HyperBodyAsAsyncBytesStream
+	size_limit_reached, timed_out, BoxedSyncRead, Constraints,
+	HyperBodyAsAsyncBytesStream, PinnedAsyncBytesStream, PinnedAsyncRead,
 };
 
-use std::{io, mem};
+use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::future::Future;
+use std::{io, mem};
 
 use tokio::time::Sleep;
-use tokio_util::io::ReaderStream;
 use tokio_stream::StreamExt;
+use tokio_util::io::ReaderStream;
 
 use futures_core::Stream;
 
@@ -30,21 +30,21 @@ impl BodyAsyncBytesStreamer {
 		let inner = match inner {
 			super::Inner::Empty => Inner::Empty,
 			super::Inner::Bytes(b) => Inner::Bytes(b),
-			super::Inner::Hyper(i) => Inner::Hyper(
-				HyperBodyAsAsyncBytesStream::new(i)
-			),
+			super::Inner::Hyper(i) => {
+				Inner::Hyper(HyperBodyAsAsyncBytesStream::new(i))
+			}
 			super::Inner::SyncReader(r) => Inner::SyncReader {
 				reader: r,
-				buf: BytesMut::zeroed(DEFAULT_CAP)
+				buf: BytesMut::zeroed(DEFAULT_CAP),
 			},
-			super::Inner::AsyncReader(r) => Inner::AsyncReader(
-				ReaderStream::new(r)
-			),
-			super::Inner::AsyncBytesStreamer(s) => Inner::AsyncBytesStreamer(s)
+			super::Inner::AsyncReader(r) => {
+				Inner::AsyncReader(ReaderStream::new(r))
+			}
+			super::Inner::AsyncBytesStreamer(s) => Inner::AsyncBytesStreamer(s),
 		};
 
 		Self {
-			inner: ConstrainedAsyncBytesStreamer::new(inner, constraints)
+			inner: ConstrainedAsyncBytesStreamer::new(inner, constraints),
 		}
 	}
 }
@@ -54,12 +54,11 @@ impl Stream for BodyAsyncBytesStreamer {
 
 	fn poll_next(
 		self: Pin<&mut Self>,
-		cx: &mut Context
+		cx: &mut Context,
 	) -> Poll<Option<io::Result<Bytes>>> {
 		self.project().inner.poll_next(cx)
 	}
 }
-
 
 const DEFAULT_CAP: usize = 4096;
 
@@ -69,10 +68,10 @@ enum Inner {
 	Hyper(HyperBodyAsAsyncBytesStream),
 	SyncReader {
 		reader: BoxedSyncRead,
-		buf: BytesMut
+		buf: BytesMut,
 	},
 	AsyncReader(ReaderStream<PinnedAsyncRead>),
-	AsyncBytesStreamer(PinnedAsyncBytesStream)
+	AsyncBytesStreamer(PinnedAsyncBytesStream),
 }
 
 impl Stream for Inner {
@@ -80,7 +79,7 @@ impl Stream for Inner {
 
 	fn poll_next(
 		self: Pin<&mut Self>,
-		cx: &mut Context
+		cx: &mut Context,
 	) -> Poll<Option<io::Result<Bytes>>> {
 		let me = self.get_mut();
 
@@ -90,7 +89,7 @@ impl Stream for Inner {
 				let bytes = mem::take(b);
 				*me = Self::Empty;
 				Poll::Ready(Some(Ok(bytes)))
-			},
+			}
 			Self::Hyper(i) => Pin::new(i).poll_next(cx),
 			Self::SyncReader { reader, buf } => {
 				if buf.len() == 0 {
@@ -101,17 +100,16 @@ impl Stream for Inner {
 
 				let read = match reader.read(buf) {
 					Ok(r) => r,
-					Err(e) => return Poll::Ready(Some(Err(e)))
+					Err(e) => return Poll::Ready(Some(Err(e))),
 				};
 
 				Poll::Ready(Some(Ok(buf.split_to(read).into())))
-			},
+			}
 			Self::AsyncReader(s) => Pin::new(s).poll_next(cx),
-			Self::AsyncBytesStreamer(s) => Pin::new(s).poll_next(cx)
+			Self::AsyncBytesStreamer(s) => Pin::new(s).poll_next(cx),
 		}
 	}
 }
-
 
 pin_project! {
 	pub(super) struct ConstrainedAsyncBytesStreamer<S> {
@@ -128,18 +126,20 @@ impl<S> ConstrainedAsyncBytesStreamer<S> {
 		Self {
 			inner: streamer,
 			timeout: constraints.timeout.map(tokio::time::sleep),
-			size_limit: constraints.size
+			size_limit: constraints.size,
 		}
 	}
 }
 
 impl<S> Stream for ConstrainedAsyncBytesStreamer<S>
-where S: Stream<Item=io::Result<Bytes>> {
+where
+	S: Stream<Item = io::Result<Bytes>>,
+{
 	type Item = io::Result<Bytes>;
 
 	fn poll_next(
 		self: Pin<&mut Self>,
-		cx: &mut Context
+		cx: &mut Context,
 	) -> Poll<Option<io::Result<Bytes>>> {
 		let mut me = self.project();
 
@@ -147,28 +147,30 @@ where S: Stream<Item=io::Result<Bytes>> {
 			let bytes = match r {
 				Some(Ok(b)) => b,
 				Some(Err(e)) => return Poll::Ready(Some(Err(e))),
-				None => return Poll::Ready(None)
+				None => return Poll::Ready(None),
 			};
 
 			// validate size_limit
 			if let Some(size_limit) = &mut me.size_limit {
 				match size_limit.checked_sub(bytes.len()) {
 					Some(ns) => *size_limit = ns,
-					None => return Poll::Ready(Some(Err(size_limit_reached(
-						"async bytes streamer to big"
-					))))
+					None => {
+						return Poll::Ready(Some(Err(size_limit_reached(
+							"async bytes streamer to big",
+						))))
+					}
 				}
 			}
 
-			return Poll::Ready(Some(Ok(bytes)))
+			return Poll::Ready(Some(Ok(bytes)));
 		}
 
 		// pending
 		if let Some(timeout) = Option::as_pin_mut(me.timeout) {
 			if let Poll::Ready(_) = timeout.poll(cx) {
-				return Poll::Ready(Some(Err(
-					timed_out("async bytes streamer took to long")
-				)))
+				return Poll::Ready(Some(Err(timed_out(
+					"async bytes streamer took to long",
+				))));
 			}
 		}
 
@@ -177,8 +179,8 @@ where S: Stream<Item=io::Result<Bytes>> {
 }
 
 pub(super) async fn async_bytes_streamer_into_bytes(
-	s: impl Stream<Item=io::Result<Bytes>>,
-	constraints: Constraints
+	s: impl Stream<Item = io::Result<Bytes>>,
+	constraints: Constraints,
 ) -> io::Result<Bytes> {
 	let stream = ConstrainedAsyncBytesStreamer::new(s, constraints);
 	tokio::pin!(stream);

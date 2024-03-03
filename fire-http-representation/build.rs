@@ -1,7 +1,6 @@
-use std::{fs, env};
-use std::path::Path;
 use std::fmt::Write;
-
+use std::path::Path;
+use std::{env, fs};
 
 fn main() {
 	let out_dir = env::var("OUT_DIR").unwrap();
@@ -102,88 +101,96 @@ fn generate_mime(out_dir: &str) {
 	);
 
 	for (id, utf8, types, extensions) in MIMES {
-		write!(value_enum,
-			"\t{id},\n"
-		).unwrap();
+		write!(value_enum, "\t{id},\n").unwrap();
 
-		write!(mime_consts,
+		write!(
+			mime_consts,
 			"\t/// File extensions: {}  \n\
 			\t/// mime types: {}\n\
 			\tpub const {id}: Self = Self(MimeValue::{id});\n",
 			extensions.join(", "),
 			types.join(", ")
-		).unwrap();
+		)
+		.unwrap();
 
 		for ext in *extensions {
-			write!(from_extension_fn,
-				"\t\t\t\"{ext}\" => Some(Self::{id}),\n"
-			).unwrap();
+			write!(from_extension_fn, "\t\t\t\"{ext}\" => Some(Self::{id}),\n")
+				.unwrap();
 		}
 
 		for ty in *types {
-			write!(from_str_fn,
-				"\t\t\t\"{ty}\" => Some(Self::{id}),\n"
-			).unwrap();
+			write!(from_str_fn, "\t\t\t\"{ty}\" => Some(Self::{id}),\n")
+				.unwrap();
 
 			if *utf8 {
-				write!(from_str_fn,
+				write!(
+					from_str_fn,
 					"\t\t\t\"{ty}; charset=utf-8\" => Some(Self::{id}),\n"
-				).unwrap();
+				)
+				.unwrap();
 			}
 		}
 
 		let ext = extensions.first().unwrap();
-		write!(extension_fn,
-			"\t\t\tSelf::{id} => \"{ext}\",\n"
-		).unwrap();
+		write!(extension_fn, "\t\t\tSelf::{id} => \"{ext}\",\n").unwrap();
 
 		let ty = types.first().unwrap();
-		write!(as_str_fn,
-			"\t\t\tSelf::{id} => \"{ty}\",\n"
-		).unwrap();
+		write!(as_str_fn, "\t\t\tSelf::{id} => \"{ty}\",\n").unwrap();
 
 		if *utf8 {
-			write!(as_str_with_maybe_charset,
+			write!(
+				as_str_with_maybe_charset,
 				"\t\t\tSelf::{id} => \"{ty}; charset=utf-8\",\n"
-			).unwrap();
+			)
+			.unwrap();
 		} else {
-			write!(as_str_with_maybe_charset,
+			write!(
+				as_str_with_maybe_charset,
 				"\t\t\tSelf::{id} => \"{ty}\",\n"
-			).unwrap();
+			)
+			.unwrap();
 		}
 	}
 
 	// now end functions
-	write!(value_enum,
-		"}}\n"
-	).unwrap();
+	write!(value_enum, "}}\n").unwrap();
 
-	write!(from_extension_fn,
+	write!(
+		from_extension_fn,
 		"\t\t\t_ => None\n\
 		\t\t}}\n\
 		\t}}\n"
-	).unwrap();
+	)
+	.unwrap();
 
-	write!(from_str_fn,
+	write!(
+		from_str_fn,
 		"\t\t\t_ => None\n\
 		\t\t}}\n\
 		\t}}\n"
-	).unwrap();
+	)
+	.unwrap();
 
-	write!(extension_fn,
+	write!(
+		extension_fn,
 		"\t\t}}\n\
 		\t}}\n"
-	).unwrap();
+	)
+	.unwrap();
 
-	write!(as_str_fn,
+	write!(
+		as_str_fn,
 		"\t\t}}\n\
 		\t}}\n"
-	).unwrap();
+	)
+	.unwrap();
 
-	write!(as_str_with_maybe_charset,
+	write!(
+		as_str_with_maybe_charset,
 		"\t\t}}\n\
 		\t}}\n"
-	).unwrap();
+	)
+	.unwrap();
 
 	// impl value enum
 	let content = format!(

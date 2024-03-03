@@ -2,10 +2,10 @@ use crate::error::ApiError;
 
 pub use fire::header::Method;
 
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 
 /// Basic request definition.
-/// 
+///
 /// The request will be serialized and deserialized
 /// via Json to ease updating structures without breaking backwards
 /// compatibility.

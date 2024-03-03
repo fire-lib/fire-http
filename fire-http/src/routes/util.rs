@@ -1,7 +1,6 @@
-use crate::{Request, Data};
+use crate::{Data, Request};
 
 use std::any::{Any, TypeId};
-
 
 fn is_req<T: Any>() -> bool {
 	TypeId::of::<T>() == TypeId::of::<Request>()
@@ -26,7 +25,7 @@ pub fn valid_route_data_as_mut<T: Any>(_data: &Data) -> bool {
 #[inline]
 pub fn get_route_data_as_ref<'a, T: Any>(
 	data: &'a Data,
-	req: &mut Option<&'a mut Request>
+	req: &mut Option<&'a mut Request>,
 ) -> &'a T {
 	if is_req::<T>() {
 		let req = req.take().unwrap();
@@ -41,7 +40,7 @@ pub fn get_route_data_as_ref<'a, T: Any>(
 #[inline]
 pub fn get_route_data_as_mut<'a, T: Any>(
 	_data: &'a Data,
-	req: &mut Option<&'a mut Request>
+	req: &mut Option<&'a mut Request>,
 ) -> &'a mut T {
 	assert!(is_req::<T>());
 

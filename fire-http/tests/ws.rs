@@ -1,19 +1,16 @@
-
-use fire_http as fire;
-use fire::Body;
-use fire::ws::{WebSocket, CloseCode, Error};
 use fire::ws;
+use fire::ws::{CloseCode, Error, WebSocket};
+use fire::Body;
+use fire_http as fire;
 
-use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::protocol::Role;
-
+use tokio_tungstenite::WebSocketStream;
 
 #[macro_use]
 mod util;
 
-
 macro_rules! ws_client {
-	($srv_addr:expr, $uri:expr, |$ws:ident| $block:block) => (
+	($srv_addr:expr, $uri:expr, |$ws:ident| $block:block) => {
 		let addr = $srv_addr.to_string();
 		let uri = format!("http://{addr}{}", $uri);
 
@@ -33,7 +30,9 @@ macro_rules! ws_client {
 			101,
 			"didn't receive switching protocols"
 		);
-		let upgrade_header = resp.headers().get("upgrade")
+		let upgrade_header = resp
+			.headers()
+			.get("upgrade")
 			.map(|v| v.to_str().ok())
 			.flatten();
 		assert_eq!(
@@ -42,20 +41,17 @@ macro_rules! ws_client {
 			"header: upgrade != \"websocket\""
 		);
 
-		let upgraded = hyper::upgrade::on(resp).await
+		let upgraded = hyper::upgrade::on(resp)
+			.await
 			.expect("could not upgrade connection");
 
 		let mut $ws = WebSocket::from_raw(
-			WebSocketStream::from_raw_socket(
-				upgraded,
-				Role::Client,
-				None
-			).await
+			WebSocketStream::from_raw_socket(upgraded, Role::Client, None)
+				.await,
 		);
 		let _ = async move { $block }.await;
-	)
+	};
 }
-
 
 #[tokio::test]
 async fn build_con() {
@@ -68,7 +64,7 @@ async fn build_con() {
 	async fn websocket_route(
 		mut ws: WebSocket,
 		_: &SomeData,
-		_: &SomeData
+		_: &SomeData,
 	) -> Result<(), Error> {
 		let mut c = 0;
 
@@ -97,9 +93,10 @@ async fn build_con() {
 	// make request
 	ws_client!(addr, "/", |ws| {
 		for i in 0..5 {
-			ws.send(format!("Hey {}", i)).await
-				.expect("could not send");
-			let msg = ws.receive().await
+			ws.send(format!("Hey {}", i)).await.expect("could not send");
+			let msg = ws
+				.receive()
+				.await
 				.expect("could not receive")
 				.expect("no message received");
 			assert_eq!(msg.to_text().expect("not text"), "Hi");
@@ -109,5 +106,4 @@ async fn build_con() {
 
 	// close the connection properly
 	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
 }

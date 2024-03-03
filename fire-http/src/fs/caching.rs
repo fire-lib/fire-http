@@ -1,20 +1,18 @@
-use crate::Response;
-use crate::into::IntoResponse;
 use crate::header::{
-	RequestHeader, ResponseHeader, StatusCode,
-	IF_NONE_MATCH, CACHE_CONTROL, ETAG
+	RequestHeader, ResponseHeader, StatusCode, CACHE_CONTROL, ETAG,
+	IF_NONE_MATCH,
 };
+use crate::into::IntoResponse;
+use crate::Response;
 
 use std::fmt;
 use std::time::Duration;
 
-use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
-
+use rand::{thread_rng, Rng};
 
 // == 1day
 const DEFAULT_MAX_AGE: Duration = Duration::from_secs(60 * 60 * 24);
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Etag(String);
@@ -53,13 +51,12 @@ impl PartialEq<&str> for Etag {
 	}
 }
 
-
 /// Controls if caching information should be sent.
-/// 
+///
 /// The Caching struct contains an Etag which stores a random tag which
 /// indentifies a specific file. The Etag gets generated when the struct gets
 /// created.
-/// 
+///
 /// ## Example
 /// ```ignore
 /// # use fire_http as fire;
@@ -67,35 +64,35 @@ impl PartialEq<&str> for Etag {
 /// use fire::fs::Caching;
 /// use fire::into::IntoResponse;
 /// use std::cell::LazyCell;
-/// 
-/// 
+///
+///
 /// const INDEX_CACHE: LazyCell<Caching> = LazyCell::new(|| {
 /// 	Caching::default()
 /// });
-/// 
+///
 /// #[get("/")]
 /// fn index(req: &mut Request) -> Response {
 /// 	let cache = INDEX_CACHE.clone();
 /// 	if cache.if_none_match(req.header()) {
 /// 		return cache.into_response()
 /// 	}
-/// 
+///
 /// 	let mut resp = Response::html("<h1>Hello, World!</h1>");
 /// 	cache.complete_header(&mut resp.header);
-/// 	
+///
 /// 	resp
 /// }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Caching {
 	max_age: Duration,
-	etag: Etag
+	etag: Etag,
 }
 
 impl Caching {
 	pub fn new(max_age: Duration) -> Self {
 		Self {
 			max_age,
-			etag: Etag::new()
+			etag: Etag::new(),
 		}
 	}
 
@@ -105,11 +102,9 @@ impl Caching {
 	}
 
 	pub fn if_none_match(&self, header: &RequestHeader) -> bool {
-		header.value(IF_NONE_MATCH)
-			.map(|none_match| {
-				none_match.len() == 30 &&
-				self.etag == none_match
-			})
+		header
+			.value(IF_NONE_MATCH)
+			.map(|none_match| none_match.len() == 30 && self.etag == none_match)
 			.unwrap_or(false)
 	}
 
@@ -118,7 +113,9 @@ impl Caching {
 	}
 
 	pub fn complete_header(self, header: &mut ResponseHeader) {
-		header.values.insert(CACHE_CONTROL, self.cache_control_string());
+		header
+			.values
+			.insert(CACHE_CONTROL, self.cache_control_string());
 
 		// etag makes only sense with files not 404
 		if header.status_code == StatusCode::OK {

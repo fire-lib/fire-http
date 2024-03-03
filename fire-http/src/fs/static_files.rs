@@ -1,49 +1,42 @@
 use super::{with_file, with_partial_file};
-use super::{IntoPathBuf, Caching, Range};
+use super::{Caching, IntoPathBuf, Range};
 
-use crate::{Request, Response, Error, Data};
-use crate::header::{RequestHeader, Method, StatusCode};
-use crate::routes::{Route, check_static};
-use crate::into::{IntoResponse, IntoRoute};
 use crate::error::ClientErrorKind;
+use crate::header::{Method, RequestHeader, StatusCode};
+use crate::into::{IntoResponse, IntoRoute};
+use crate::routes::{check_static, Route};
 use crate::util::PinnedFuture;
+use crate::{Data, Error, Request, Response};
 
+use std::borrow::Cow;
+use std::io;
 use std::path::Path;
 use std::time::Duration;
-use std::io;
-use std::borrow::Cow;
-
 
 /// returns io::Error not found if the path is a directory
 pub async fn serve_file(
 	path: impl AsRef<Path>,
 	req: &Request,
-	caching: Option<Caching>
+	caching: Option<Caching>,
 ) -> io::Result<Response> {
-
 	// check caching and if the etag matches return NOT_MODIFIED
 	if matches!(&caching, Some(c) if c.if_none_match(req.header())) {
-		return Ok(caching.unwrap().into_response())
+		return Ok(caching.unwrap().into_response());
 	}
 
 	let range = Range::parse(req.header());
 
 	let mut res = match range {
-		Some(range) => {
-			with_partial_file(path, range).await?
-				.into_response()
-		},
-		None => {
-			with_file(path).await?
-				.into_response()
-		}
+		Some(range) => with_partial_file(path, range).await?.into_response(),
+		None => with_file(path).await?.into_response(),
 	};
 
 	// set etag
 	if let Some(caching) = caching {
-		if matches!(res.header.status_code,
-			StatusCode::OK | StatusCode::NOT_FOUND)
-		{
+		if matches!(
+			res.header.status_code,
+			StatusCode::OK | StatusCode::NOT_FOUND
+		) {
 			caching.complete_header(&mut res.header);
 		}
 	}
@@ -55,7 +48,7 @@ pub async fn serve_file(
 pub(super) enum CachingBuilder {
 	None,
 	Default,
-	MaxAge(Duration)
+	MaxAge(Duration),
 }
 
 impl From<CachingBuilder> for Option<Caching> {
@@ -63,20 +56,20 @@ impl From<CachingBuilder> for Option<Caching> {
 		match b {
 			CachingBuilder::None => None,
 			CachingBuilder::Default => Some(Caching::default()),
-			CachingBuilder::MaxAge(age) => Some(Caching::new(age))
+			CachingBuilder::MaxAge(age) => Some(Caching::new(age)),
 		}
 	}
 }
 
 /// Static get handler which servers files from a directory.
-/// 
+///
 /// ## Example
 /// ```
 /// # use fire_http as fire;
 /// use fire::fs::StaticFiles;
-/// 
+///
 /// const FILES: StaticFiles = StaticFiles::new("/files", "./www/");
-/// 
+///
 /// #[tokio::main]
 /// async fn main() {
 /// 	let mut server = fire::build("127.0.0.1:0").await.unwrap();
@@ -87,25 +80,37 @@ impl From<CachingBuilder> for Option<Caching> {
 pub struct StaticFiles {
 	uri: &'static str,
 	path: &'static str,
-	caching: CachingBuilder
+	caching: CachingBuilder,
 }
 
 impl StaticFiles {
 	/// Creates a `StaticFiles` with Default caching settings
 	pub const fn new(uri: &'static str, path: &'static str) -> Self {
-		Self { uri, path, caching: CachingBuilder::Default }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::Default,
+		}
 	}
 
 	pub const fn no_cache(uri: &'static str, path: &'static str) -> Self {
-		Self { uri, path, caching: CachingBuilder::None }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::None,
+		}
 	}
 
 	pub const fn cache_with_age(
 		uri: &'static str,
 		path: &'static str,
-		max_age: Duration
+		max_age: Duration,
 	) -> Self {
-		Self { uri, path, caching: CachingBuilder::MaxAge(max_age) }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::MaxAge(max_age),
+		}
 	}
 }
 
@@ -116,18 +121,18 @@ impl IntoRoute for StaticFiles {
 		StaticFilesRoute {
 			uri: self.uri.into(),
 			path: self.path.into(),
-			caching: self.caching.into()
+			caching: self.caching.into(),
 		}
 	}
 }
 
 /// Static get handler which servers files from a directory.
-/// 
+///
 /// ## Example
 /// ```
 /// # use fire_http as fire;
 /// use fire::fs::StaticFilesOwned;
-/// 
+///
 /// #[tokio::main]
 /// async fn main() {
 /// 	let mut server = fire::build("127.0.0.1:0").await.unwrap();
@@ -140,25 +145,37 @@ impl IntoRoute for StaticFiles {
 pub struct StaticFilesOwned {
 	uri: String,
 	path: String,
-	caching: CachingBuilder
+	caching: CachingBuilder,
 }
 
 impl StaticFilesOwned {
 	/// Creates a `StaticFiles` with Default caching settings
 	pub fn new(uri: String, path: String) -> Self {
-		Self { uri, path, caching: CachingBuilder::Default }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::Default,
+		}
 	}
 
 	pub fn no_cache(uri: String, path: String) -> Self {
-		Self { uri, path, caching: CachingBuilder::None }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::None,
+		}
 	}
 
 	pub fn cache_with_age(
 		uri: String,
 		path: String,
-		max_age: Duration
+		max_age: Duration,
 	) -> Self {
-		Self { uri, path, caching: CachingBuilder::MaxAge(max_age) }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::MaxAge(max_age),
+		}
 	}
 }
 
@@ -169,7 +186,7 @@ impl IntoRoute for StaticFilesOwned {
 		StaticFilesRoute {
 			uri: self.uri.into(),
 			path: self.path.into(),
-			caching: self.caching.into()
+			caching: self.caching.into(),
 		}
 	}
 }
@@ -178,13 +195,13 @@ impl IntoRoute for StaticFilesOwned {
 pub struct StaticFilesRoute {
 	uri: Cow<'static, str>,
 	path: Cow<'static, str>,
-	caching: Option<Caching>
+	caching: Option<Caching>,
 }
 
 impl Route for StaticFilesRoute {
 	fn check(&self, header: &RequestHeader) -> bool {
-		header.method() == &Method::GET &&
-		header.uri().path().starts_with(&*self.uri)
+		header.method() == &Method::GET
+			&& header.uri().path().starts_with(&*self.uri)
 	}
 
 	fn validate_data(&self, _data: &Data) {}
@@ -192,16 +209,14 @@ impl Route for StaticFilesRoute {
 	fn call<'a>(
 		&'a self,
 		req: &'a mut Request,
-		_: &'a Data
+		_: &'a Data,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		let uri = &self.uri;
 		let caching = self.caching.clone();
 
 		PinnedFuture::new(async move {
-
-			let res_path_buf = req.header().uri()
-				.path()[uri.len()..]
-				.into_path_buf();
+			let res_path_buf =
+				req.header().uri().path()[uri.len()..].into_path_buf();
 
 			// validate path buf
 			// if path is a directory serve_file will return NotFound
@@ -213,15 +228,15 @@ impl Route for StaticFilesRoute {
 
 			tracing::info!("trying to serve {:?}", path_buf);
 
-			serve_file(path_buf, &req, caching).await
+			serve_file(path_buf, &req, caching)
+				.await
 				.map_err(Error::from_client_io)
 		})
 	}
-
 }
 
 /// Static get handler which servers/returns a file.
-/// 
+///
 /// ## Example
 /// ```
 /// # use fire_http as fire;
@@ -233,25 +248,37 @@ impl Route for StaticFilesRoute {
 pub struct StaticFile {
 	uri: &'static str,
 	path: &'static str,
-	caching: CachingBuilder
+	caching: CachingBuilder,
 }
 
 impl StaticFile {
 	/// Creates a `StaticFile` with Default caching settings
 	pub const fn new(uri: &'static str, path: &'static str) -> Self {
-		Self { uri, path, caching: CachingBuilder::Default }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::Default,
+		}
 	}
 
 	pub const fn no_cache(uri: &'static str, path: &'static str) -> Self {
-		Self { uri, path, caching: CachingBuilder::None }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::None,
+		}
 	}
 
 	pub const fn cache_with_age(
 		uri: &'static str,
 		path: &'static str,
-		max_age: Duration
+		max_age: Duration,
 	) -> Self {
-		Self { uri, path, caching: CachingBuilder::MaxAge(max_age) }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::MaxAge(max_age),
+		}
 	}
 }
 
@@ -262,13 +289,13 @@ impl IntoRoute for StaticFile {
 		StaticFileRoute {
 			uri: self.uri.into(),
 			path: self.path.into(),
-			caching: self.caching.into()
+			caching: self.caching.into(),
 		}
 	}
 }
 
 /// Static get handler which servers/returns a file.
-/// 
+///
 /// ## Example
 /// ```
 /// # use fire_http as fire;
@@ -286,25 +313,37 @@ impl IntoRoute for StaticFile {
 pub struct StaticFileOwned {
 	uri: String,
 	path: String,
-	caching: CachingBuilder
+	caching: CachingBuilder,
 }
 
 impl StaticFileOwned {
 	/// Creates a `StaticFile` with Default caching settings
 	pub const fn new(uri: String, path: String) -> Self {
-		Self { uri, path, caching: CachingBuilder::Default }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::Default,
+		}
 	}
 
 	pub const fn no_cache(uri: String, path: String) -> Self {
-		Self { uri, path, caching: CachingBuilder::None }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::None,
+		}
 	}
 
 	pub const fn cache_with_age(
 		uri: String,
 		path: String,
-		max_age: Duration
+		max_age: Duration,
 	) -> Self {
-		Self { uri, path, caching: CachingBuilder::MaxAge(max_age) }
+		Self {
+			uri,
+			path,
+			caching: CachingBuilder::MaxAge(max_age),
+		}
 	}
 }
 
@@ -315,7 +354,7 @@ impl IntoRoute for StaticFileOwned {
 		StaticFileRoute {
 			uri: self.uri.into(),
 			path: self.path.into(),
-			caching: self.caching.into()
+			caching: self.caching.into(),
 		}
 	}
 }
@@ -324,13 +363,13 @@ impl IntoRoute for StaticFileOwned {
 pub struct StaticFileRoute {
 	uri: Cow<'static, str>,
 	path: Cow<'static, str>,
-	caching: Option<Caching>
+	caching: Option<Caching>,
 }
 
 impl Route for StaticFileRoute {
 	fn check(&self, header: &RequestHeader) -> bool {
-		header.method() == &Method::GET &&
-		check_static(header.uri().path(), &*self.uri)
+		header.method() == &Method::GET
+			&& check_static(header.uri().path(), &*self.uri)
 	}
 
 	fn validate_data(&self, _data: &Data) {}
@@ -338,12 +377,12 @@ impl Route for StaticFileRoute {
 	fn call<'a>(
 		&'a self,
 		req: &'a mut Request,
-		_: &'a Data
+		_: &'a Data,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		PinnedFuture::new(async move {
-			serve_file(&*self.path, &req, self.caching.clone()).await
+			serve_file(&*self.path, &req, self.caching.clone())
+				.await
 				.map_err(Error::from_client_io)
 		})
 	}
-
 }

@@ -1,32 +1,33 @@
-use crate::{Request, Response, Body};
-use crate::server::HyperRequest;
 use crate::fire::RequestConfigs;
 use crate::header::{ContentType, CONTENT_TYPE};
+use crate::server::HyperRequest;
+use crate::{Body, Request, Response};
 
-use std::task::Poll;
-use std::pin::Pin;
 use std::future::Future;
-use std::task::Context;
 use std::net::SocketAddr;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
 
 use tracing::error;
 
 mod header;
-use header::{convert_hyper_parts_to_fire_header};
+use header::convert_hyper_parts_to_fire_header;
 pub(crate) use header::HeaderError;
 
 use types::body::BodyHttp;
 
-
 pub struct PinnedFuture<'a, O> {
-	inner: Pin<Box<dyn Future<Output = O> + Send + 'a>>
+	inner: Pin<Box<dyn Future<Output = O> + Send + 'a>>,
 }
 
 impl<'a, O> PinnedFuture<'a, O> {
 	pub fn new<F>(future: F) -> Self
-	where F: Future<Output = O> + Send + 'a {
+	where
+		F: Future<Output = O> + Send + 'a,
+	{
 		Self {
-			inner: Box::pin(future)
+			inner: Box::pin(future),
 		}
 	}
 }
@@ -38,16 +39,13 @@ impl<O> Future for PinnedFuture<'_, O> {
 	}
 }
 
-
 // private stuff
-
 
 pub(crate) fn convert_hyper_req_to_fire_req(
 	hyper_req: HyperRequest,
 	address: SocketAddr,
-	configs: &RequestConfigs
+	configs: &RequestConfigs,
 ) -> Result<Request, HeaderError> {
-
 	let (parts, body) = hyper_req.into_parts();
 
 	let mut body = Body::from_hyper(body);
@@ -59,12 +57,10 @@ pub(crate) fn convert_hyper_req_to_fire_req(
 	Ok(Request::new(header, body))
 }
 
-
 // // Response
 pub(crate) fn convert_fire_resp_to_hyper_resp(
-	response: Response
+	response: Response,
 ) -> hyper::Response<BodyHttp> {
-
 	// debug_checks
 	#[cfg(debug_assertions)]
 	let _ = validate_content_length(&response);
@@ -78,8 +74,7 @@ pub(crate) fn convert_fire_resp_to_hyper_resp(
 		}
 	}
 
-	let mut builder = hyper::Response::builder()
-		.status(header.status_code);
+	let mut builder = hyper::Response::builder().status(header.status_code);
 
 	*builder.headers_mut().unwrap() = header.values.into_inner();
 
@@ -87,7 +82,6 @@ pub(crate) fn convert_fire_resp_to_hyper_resp(
 	// but no argument can fail that we pass here
 	builder.body(response.body.into_http_body()).unwrap()
 }
-
 
 #[cfg(debug_assertions)]
 fn validate_content_length(response: &Response) -> Option<()> {

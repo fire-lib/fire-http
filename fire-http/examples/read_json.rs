@@ -1,14 +1,13 @@
 use fire_http as fire;
 
-use fire::{Result, Request, Response, get, post};
+use fire::{get, post, Request, Response, Result};
 
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MyType {
 	crazy: String,
-	good: String
+	good: String,
 }
 
 #[get("/")]
@@ -28,7 +27,7 @@ fn hello_world() -> Response {
 				}).then(r => r.text());
 				alert(`response: ${ await res }`);
 			});
-		</script>"
+		</script>",
 	)
 }
 
@@ -40,7 +39,8 @@ async fn hello_world_json(req: &mut Request) -> Result<String> {
 
 #[tokio::main]
 async fn main() {
-	let mut server = fire::build("0.0.0.0:3000").await
+	let mut server = fire::build("0.0.0.0:3000")
+		.await
 		.expect("Address could not be parsed");
 
 	server.add_route(hello_world);

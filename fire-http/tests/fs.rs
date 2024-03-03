@@ -1,10 +1,9 @@
-use fire_http as fire;
-use fire::Body;
 use fire::fs::StaticFiles;
+use fire::Body;
+use fire_http as fire;
 
 #[macro_use]
 mod util;
-
 
 #[tokio::test]
 async fn read_file() {
@@ -15,7 +14,8 @@ async fn read_file() {
 		builder.add_route(CSS);
 	});
 
-	make_request!("GET", addr, "/css").await
+	make_request!("GET", addr, "/css")
+		.await
 		// folder should be not found
 		.assert_status(404)
 		.assert_not_header("cache-control")
@@ -23,7 +23,8 @@ async fn read_file() {
 		.assert_header("content-length", "0");
 
 	let file_ctn = include_str!("./../examples/www/css/style.css");
-	let res = make_request!("GET", addr, "/css/style.css").await
+	let res = make_request!("GET", addr, "/css/style.css")
+		.await
 		.assert_status(200)
 		.assert_header("content-length", file_ctn.len().to_string())
 		.assert_header("content-type", "text/css; charset=utf-8")
@@ -36,9 +37,9 @@ async fn read_file() {
 		req.header("if-none-match", etag)
 			.body(Body::new().into_http_body())
 			.expect("could not build request")
-	}).await
-		.assert_status(304)
-		.assert_header("cache-control", "max-age=86400, public")
-		.assert_not_header("content-type");
-
+	})
+	.await
+	.assert_status(304)
+	.assert_header("cache-control", "max-age=86400, public")
+	.assert_not_header("content-type");
 }

@@ -5,13 +5,12 @@ use std::fmt;
 use api::error::{ApiError, Error as ErrorTrait, StatusCode};
 use api::stream::{Stream, StreamKind, Streamer};
 
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
 pub enum Error {
 	Internal(String),
-	Request(String)
+	Request(String),
 }
 
 impl ApiError for Error {
@@ -26,7 +25,7 @@ impl ApiError for Error {
 	fn status_code(&self) -> StatusCode {
 		match self {
 			Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-			Self::Request(_) => StatusCode::BAD_REQUEST
+			Self::Request(_) => StatusCode::BAD_REQUEST,
 		}
 	}
 }
@@ -39,12 +38,12 @@ impl fmt::Display for Error {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SenderReq {
-	count: u64
+	count: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SenderMsg {
-	lucky_number: u64
+	lucky_number: u64,
 }
 
 impl Stream for SenderReq {
@@ -60,12 +59,12 @@ async fn lucky_number_stream(
 	req: SenderReq,
 	mut streamer: Streamer<SenderMsg>,
 	_some_data: &SenderMsg,
-	_more_data: &SenderReq
+	_more_data: &SenderReq,
 ) -> Result<(), Error> {
 	for i in 0..req.count {
-		streamer.send(SenderMsg {
-			lucky_number: i
-		}).await
+		streamer
+			.send(SenderMsg { lucky_number: i })
+			.await
 			.map_err(|e| Error::Internal(e.to_string()))?;
 	}
 

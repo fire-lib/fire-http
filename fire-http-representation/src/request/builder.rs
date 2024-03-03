@@ -1,13 +1,12 @@
 use super::Request;
 use crate::body::Body;
 use crate::header::{
-	RequestHeader, ContentType, HeaderValues, HeaderValue, Method, Uri,
-	values::IntoHeaderName, CONTENT_LENGTH, CONTENT_TYPE
+	values::IntoHeaderName, ContentType, HeaderValue, HeaderValues, Method,
+	RequestHeader, Uri, CONTENT_LENGTH, CONTENT_TYPE,
 };
 
 use std::fmt;
 use std::net::SocketAddr;
-
 
 /// A builder to create a `Request`.
 ///
@@ -15,7 +14,7 @@ use std::net::SocketAddr;
 #[derive(Debug)]
 pub struct RequestBuilder {
 	header: RequestHeader,
-	body: Body
+	body: Body,
 }
 
 impl RequestBuilder {
@@ -26,9 +25,9 @@ impl RequestBuilder {
 				address: ([127, 0, 0, 1], 0).into(),
 				method: Method::GET,
 				uri,
-				values: HeaderValues::new()
+				values: HeaderValues::new(),
 			},
-			body: Body::new()
+			body: Body::new(),
 		}
 	}
 
@@ -45,26 +44,23 @@ impl RequestBuilder {
 	}
 
 	/// Sets the content type.
-	pub fn content_type(
-		self,
-		content_type: impl Into<ContentType>
-	) -> Self {
+	pub fn content_type(self, content_type: impl Into<ContentType>) -> Self {
 		self.header(CONTENT_TYPE, content_type.into())
 	}
 
 	/// Sets a header value.
-	/// 
+	///
 	/// ## Note
 	/// Only ASCII characters are allowed, use
 	/// `self.values_mut().insert_encoded()` to allow any character.
-	/// 
+	///
 	/// ## Panics
 	/// If the value is not a valid `HeaderValue`.
 	pub fn header<K, V>(mut self, key: K, val: V) -> Self
 	where
 		K: IntoHeaderName,
 		V: TryInto<HeaderValue>,
-		V::Error: fmt::Debug
+		V::Error: fmt::Debug,
 	{
 		self.values_mut().insert(key, val);
 		self
@@ -92,5 +88,4 @@ impl RequestBuilder {
 
 		Request::new(self.header, self.body)
 	}
-
 }

@@ -1,14 +1,12 @@
-
 use fire_http as fire;
 
-use fire::{Request, Response, Body, Data, get, post};
-use fire::header::{RequestHeader, ResponseHeader, StatusCode, Mime};
+use fire::header::{Mime, RequestHeader, ResponseHeader, StatusCode};
 use fire::routes::Catcher;
 use fire::util::PinnedFuture;
+use fire::{get, post, Body, Data, Request, Response};
 
 #[macro_use]
 mod util;
-
 
 #[tokio::test]
 async fn hello_world() {
@@ -16,18 +14,22 @@ async fn hello_world() {
 
 	// build route
 	#[get("/")]
-	fn hello_world() -> &'static str { BODY }
+	fn hello_world() -> &'static str {
+		BODY
+	}
 
 	let addr = spawn_server!(|builder| {
 		builder.add_route(hello_world);
 	});
 
 	// now do a request
-	make_request!("GET", addr, "/").await
+	make_request!("GET", addr, "/")
+		.await
 		.assert_status(200)
 		.assert_header("content-type", "text/plain; charset=utf-8")
 		.assert_header("content-length", BODY.len().to_string())
-		.assert_body_str(BODY).await;
+		.assert_body_str(BODY)
+		.await;
 }
 
 #[tokio::test]
@@ -45,7 +47,8 @@ async fn test_post() {
 	});
 
 	// now do a request
-	make_request!("POST", addr, "/", BODY).await
+	make_request!("POST", addr, "/", BODY)
+		.await
 		.assert_status(200)
 		// this is the default content-type
 		// we should probably change that
@@ -53,7 +56,8 @@ async fn test_post() {
 		// because we return a stream
 		// we don't know how big it is
 		.assert_not_header("content-length")
-		.assert_body_str(BODY).await;
+		.assert_body_str(BODY)
+		.await;
 }
 
 #[tokio::test]
@@ -71,7 +75,7 @@ async fn test_catcher() {
 			&'a self,
 			_req: &'a mut Request,
 			resp: &'a mut Response,
-			_data: &'a Data
+			_data: &'a Data,
 		) -> PinnedFuture<'a, fire::Result<()>> {
 			PinnedFuture::new(async move {
 				*resp = Response::builder()
@@ -90,13 +94,15 @@ async fn test_catcher() {
 	});
 
 	// now do a request
-	make_request!("GET", addr, "/").await
+	make_request!("GET", addr, "/")
+		.await
 		.assert_status(404)
 		// this is the default content-type
 		// we should probably change that
 		.assert_header("content-type", "text/plain; charset=utf-8")
 		.assert_header("content-length", BODY.len().to_string())
-		.assert_body_str(BODY).await;
+		.assert_body_str(BODY)
+		.await;
 }
 
 #[tokio::test]
@@ -115,19 +121,19 @@ async fn anything() {
 		data.0.clone()
 	}
 
-	let addr = spawn_server!(
-		|builder| {
-			builder.add_data(Data(data.clone()));
-			builder.add_route(get);
-		}
-	);
+	let addr = spawn_server!(|builder| {
+		builder.add_data(Data(data.clone()));
+		builder.add_route(get);
+	});
 
 	// now do a request
-	make_request!("GET", addr, "/").await
+	make_request!("GET", addr, "/")
+		.await
 		.assert_status(200)
 		// this is the default content-type
 		// we should probably change that
 		.assert_header("content-type", "application/octet-stream")
 		.assert_header("content-length", data.len().to_string())
-		.assert_body_vec(&data).await;
+		.assert_body_vec(&data)
+		.await;
 }

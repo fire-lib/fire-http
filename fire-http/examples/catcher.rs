@@ -1,9 +1,9 @@
 use fire_http as fire;
 
-use fire::{Result, Request, Response, Data, get};
+use fire::header::{RequestHeader, ResponseHeader, StatusCode};
 use fire::routes::Catcher;
-use fire::header::{StatusCode, RequestHeader, ResponseHeader};
 use fire::util::PinnedFuture;
+use fire::{get, Data, Request, Response, Result};
 
 #[get("/")]
 fn hello_world() -> &'static str {
@@ -21,26 +21,26 @@ impl Catcher for Error404Handler {
 		&'a self,
 		req: &'a mut Request,
 		resp: &'a mut Response,
-		_data: &'a Data
+		_data: &'a Data,
 	) -> PinnedFuture<'a, Result<()>> {
 		PinnedFuture::new(async move {
 			let path = req.header().uri().path();
 			let method = req.header().method();
 			resp.body = format!(
 				"Error 404: Page \"{}\" With Method \"{}\" Not Found",
-				path,
-				method
-			).into();
+				path, method
+			)
+			.into();
 
 			Ok(())
 		})
 	}
 }
 
-
 #[tokio::main]
 async fn main() {
-	let mut server = fire::build("0.0.0.0:3000").await
+	let mut server = fire::build("0.0.0.0:3000")
+		.await
 		.expect("Address could not be parsed");
 
 	server.add_route(hello_world);

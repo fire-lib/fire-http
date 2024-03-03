@@ -1,15 +1,15 @@
-use super::{WebSocket, LogWebSocketReturn};
-use crate::{Result, Data, Response};
+use super::{LogWebSocketReturn, WebSocket};
 use crate::error::ClientErrorKind;
 use crate::header::{
-	StatusCode, UPGRADE, SEC_WEBSOCKET_VERSION, SEC_WEBSOCKET_KEY, CONNECTION,
-	SEC_WEBSOCKET_ACCEPT
+	StatusCode, CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY,
+	SEC_WEBSOCKET_VERSION, UPGRADE,
 };
 use crate::server::HyperRequest;
+use crate::{Data, Response, Result};
 
-use std::mem::ManuallyDrop;
 use std::any::{Any, TypeId};
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 
 use tracing::error;
 
@@ -21,7 +21,6 @@ use hyper::upgrade::OnUpgrade;
 pub use tokio::task::spawn;
 
 use base64::prelude::{Engine as _, BASE64_STANDARD};
-
 
 fn is_ws<T: Any>() -> bool {
 	TypeId::of::<T>() == TypeId::of::<WebSocket>()
@@ -43,15 +42,14 @@ pub fn valid_ws_data_as_owned<T: Any>(_: &Data) -> bool {
 	is_ws::<T>()
 }
 
-
 pub struct DataManager<T> {
-	inner: RefCell<Option<T>>
+	inner: RefCell<Option<T>>,
 }
 
 impl<T> DataManager<T> {
 	pub fn new(val: T) -> Self {
 		Self {
-			inner: RefCell::new(Some(val))
+			inner: RefCell::new(Some(val)),
 		}
 	}
 
@@ -70,9 +68,7 @@ impl<T> DataManager<T> {
 		let r = ManuallyDrop::new(r);
 		// since the borrow counter does not get decreased because of the
 		// ManuallyDrop and the lifetime not getting expanded this is safe
-		unsafe {
-			&*(&**r as *const Option<T>)
-		}.as_ref().unwrap()
+		unsafe { &*(&**r as *const Option<T>) }.as_ref().unwrap()
 	}
 
 	/// ##Panics
@@ -86,7 +82,7 @@ impl<T> DataManager<T> {
 #[inline]
 pub fn get_ws_data_as_ref<'a, T: Any>(
 	data: &'a Data,
-	ws: &'a DataManager<WebSocket>
+	ws: &'a DataManager<WebSocket>,
 ) -> &'a T {
 	if is_ws::<T>() {
 		let ws = ws.as_ref();
@@ -101,12 +97,10 @@ pub fn get_ws_data_as_ref<'a, T: Any>(
 #[inline]
 pub fn get_ws_data_as_owned<T: Any>(
 	_data: &Data,
-	ws: &DataManager<WebSocket>
+	ws: &DataManager<WebSocket>,
 ) -> T {
 	if is_ws::<T>() {
-		unsafe {
-			transform_websocket(ws.take())
-		}
+		unsafe { transform_websocket(ws.take()) }
 	} else {
 		unreachable!()
 	}
@@ -140,21 +134,20 @@ pub fn log_websocket_return(r: impl LogWebSocketReturn) {
 pub fn upgrade(req: &mut HyperRequest) -> Result<(OnUpgrade, String)> {
 	// if headers not match for websocket
 	// return bad request
-	let header_upgrade = req.headers()
-		.get(UPGRADE)
-		.and_then(|v| v.to_str().ok());
-	let header_version = req.headers()
+	let header_upgrade =
+		req.headers().get(UPGRADE).and_then(|v| v.to_str().ok());
+	let header_version = req
+		.headers()
 		.get(SEC_WEBSOCKET_VERSION)
 		.and_then(|v| v.to_str().ok());
-	let websocket_key = req.headers()
-		.get(SEC_WEBSOCKET_KEY)
-		.map(|v| v.as_bytes());
+	let websocket_key =
+		req.headers().get(SEC_WEBSOCKET_KEY).map(|v| v.as_bytes());
 
 	if !matches!(
 		(header_upgrade, header_version, websocket_key),
 		(Some("websocket"), Some("13"), Some(_))
 	) {
-		return Err(ClientErrorKind::BadRequest.into())
+		return Err(ClientErrorKind::BadRequest.into());
 	}
 
 	// calculate websocket key stuff
@@ -164,7 +157,7 @@ pub fn upgrade(req: &mut HyperRequest) -> Result<(OnUpgrade, String)> {
 		let mut sha1 = sha1::Sha1::new();
 		sha1.update(websocket_key);
 		sha1.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-		// cannot fail because 
+		// cannot fail because
 		BASE64_STANDARD.encode(sha1.finalize())
 	};
 

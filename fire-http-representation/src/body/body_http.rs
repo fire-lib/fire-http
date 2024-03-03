@@ -1,18 +1,17 @@
-use super::{Constraints, BodyAsyncBytesStreamer};
+use super::{BodyAsyncBytesStreamer, Constraints};
 
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use hyper::body::HttpBody;
 use http::header::{HeaderMap, HeaderValue};
+use hyper::body::HttpBody;
 
 use futures_core::Stream;
 
 use pin_project_lite::pin_project;
 
 use bytes::Bytes;
-
 
 pin_project! {
 	pub struct BodyHttp {
@@ -24,7 +23,7 @@ pin_project! {
 impl BodyHttp {
 	pub(super) fn new(inner: super::Inner, constraints: Constraints) -> Self {
 		Self {
-			inner: BodyAsyncBytesStreamer::new(inner, constraints)
+			inner: BodyAsyncBytesStreamer::new(inner, constraints),
 		}
 	}
 }
@@ -35,28 +34,27 @@ impl HttpBody for BodyHttp {
 
 	fn poll_data(
 		self: Pin<&mut Self>,
-		cx: &mut Context
+		cx: &mut Context,
 	) -> Poll<Option<io::Result<Bytes>>> {
 		let me = self.project();
 		match me.inner.poll_next(cx) {
 			Poll::Ready(Some(Ok(b))) => Poll::Ready(Some(Ok(b))),
 			Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
 			Poll::Ready(None) => Poll::Ready(None),
-			Poll::Pending => Poll::Pending
+			Poll::Pending => Poll::Pending,
 		}
 	}
 
 	fn poll_trailers(
 		self: Pin<&mut Self>,
-		_cx: &mut Context
+		_cx: &mut Context,
 	) -> Poll<io::Result<Option<HeaderMap<HeaderValue>>>> {
 		Poll::Ready(Ok(None))
 	}
 }
 
-
 pub(super) struct HyperBodyAsAsyncBytesStream {
-	inner: hyper::Body
+	inner: hyper::Body,
 }
 
 impl HyperBodyAsAsyncBytesStream {
@@ -70,26 +68,21 @@ impl Stream for HyperBodyAsAsyncBytesStream {
 
 	fn poll_next(
 		self: Pin<&mut Self>,
-		cx: &mut Context
+		cx: &mut Context,
 	) -> Poll<Option<io::Result<Bytes>>> {
 		let me = self.get_mut();
 		// loop to retry to get data
 		loop {
 			let r = match Pin::new(&mut me.inner).poll_data(cx) {
-				Poll::Ready(Some(Ok(data))) => {
-					Poll::Ready(Some(Ok(data)))
-				},
-				Poll::Ready(Some(Err(e))) => {
-					Poll::Ready(Some(Err(io::Error::new(
-						io::ErrorKind::Other,
-						e
-					))))
-				},
+				Poll::Ready(Some(Ok(data))) => Poll::Ready(Some(Ok(data))),
+				Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(
+					io::Error::new(io::ErrorKind::Other, e),
+				))),
 				Poll::Ready(None) => Poll::Ready(None),
-				Poll::Pending => Poll::Pending
+				Poll::Pending => Poll::Pending,
 			};
 
-			break r
+			break r;
 		}
 	}
 }

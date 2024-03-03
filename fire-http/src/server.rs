@@ -1,32 +1,31 @@
-use crate::{Result, Error, FirePit};
-use crate::util::PinnedFuture;
 use crate::fire::{self, Wood};
+use crate::util::PinnedFuture;
+use crate::{Error, FirePit, Result};
 
-use std::future;
-use std::sync::Arc;
-use std::net::SocketAddr;
-use std::task::{Poll, Context};
 use std::convert::Infallible;
+use std::future;
+use std::net::SocketAddr;
 use std::result::Result as StdResult;
+use std::sync::Arc;
+use std::task::{Context, Poll};
 
 use types::body::BodyHttp;
 
-use hyper::Response;
-use hyper::service::Service;
 use hyper::server::conn::{AddrIncoming, AddrStream};
-
+use hyper::service::Service;
+use hyper::Response;
 
 pub type HyperRequest = hyper::Request<hyper::Body>;
 
 // todo replace this function once hyper-util is ready
 pub(crate) struct Server {
-	listener: hyper::Server<AddrIncoming, MakeFireService>
+	listener: hyper::Server<AddrIncoming, MakeFireService>,
 }
 
 impl Server {
 	pub(crate) async fn bind(
 		addr: SocketAddr,
-		wood: Arc<Wood>
+		wood: Arc<Wood>,
 	) -> Result<Self> {
 		let listener = hyper::Server::try_bind(&addr)
 			.map_err(Error::from_server_error)?
@@ -45,16 +44,21 @@ impl Server {
 
 /// A `tower::Service` to be used with the `hyper::Server`
 pub struct MakeFireService {
-	pub(crate) wood: Arc<Wood>
+	pub(crate) wood: Arc<Wood>,
 }
 
 impl MakeFireService {
 	pub fn pit(&self) -> FirePit {
-		FirePit { wood: self.wood.clone() }
+		FirePit {
+			wood: self.wood.clone(),
+		}
 	}
 
 	pub fn make(&self, address: SocketAddr) -> FireService {
-		FireService { wood: self.wood.clone(), address }
+		FireService {
+			wood: self.wood.clone(),
+			address,
+		}
 	}
 }
 
@@ -65,7 +69,7 @@ impl<'a> Service<&'a AddrStream> for MakeFireService {
 
 	fn poll_ready(
 		&mut self,
-		_: &mut Context
+		_: &mut Context,
 	) -> Poll<StdResult<(), Infallible>> {
 		Poll::Ready(Ok(()))
 	}
@@ -74,14 +78,14 @@ impl<'a> Service<&'a AddrStream> for MakeFireService {
 		let address = addr_stream.remote_addr();
 		future::ready(Ok(FireService {
 			wood: self.wood.clone(),
-			address
+			address,
 		}))
 	}
 }
 
 pub struct FireService {
 	wood: Arc<Wood>,
-	address: SocketAddr
+	address: SocketAddr,
 }
 
 impl Service<HyperRequest> for FireService {
@@ -91,7 +95,7 @@ impl Service<HyperRequest> for FireService {
 
 	fn poll_ready(
 		&mut self,
-		_: &mut Context
+		_: &mut Context,
 	) -> Poll<StdResult<(), Infallible>> {
 		Poll::Ready(Ok(()))
 	}

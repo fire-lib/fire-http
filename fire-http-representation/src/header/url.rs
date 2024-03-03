@@ -1,31 +1,32 @@
 use super::Uri;
 
-use http::uri::{Scheme, Authority, PathAndQuery};
+use http::uri::{Authority, PathAndQuery, Scheme};
 
 pub use form_urlencoded::Parse as QueryIter;
 
 /// Contains a request url.
-/// 
+///
 /// This is a wrapper around `Uri` with the caveat that a scheme
 /// and an authority is set, which makes it a Url.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Url {
 	scheme: Scheme,
 	authority: Authority,
-	path_and_query: PathAndQuery
+	path_and_query: PathAndQuery,
 }
 
 impl Url {
 	/// Creates a new `Uri` from an `http::Uri`
-	/// 
+	///
 	/// Returns None if the `http::Uri` does not contain a scheme or authority.
 	pub fn from_inner(inner: Uri) -> Option<Self> {
 		let parts = inner.into_parts();
 		Some(Self {
 			scheme: parts.scheme?,
 			authority: parts.authority?,
-			path_and_query: parts.path_and_query
-				.unwrap_or_else(|| PathAndQuery::from_static("/"))
+			path_and_query: parts
+				.path_and_query
+				.unwrap_or_else(|| PathAndQuery::from_static("/")),
 		})
 	}
 
@@ -73,13 +74,12 @@ impl Url {
 		self.path_and_query.query()
 	}
 
-
 	// named as parse_query_pairs since maybe it would make sense
 	// to make a separate type which allows to lookup pairs
 	// and deserialize values in it which would be in `query_pairs`
 	//
 	/// Returns an iterator with the Item `(Cow<'_, str>, Cow<'_, str>)`
-	/// 
+	///
 	/// Key and values are percent decoded.
 	pub fn parse_query_pairs(&self) -> QueryIter {
 		form_urlencoded::parse(self.query().unwrap_or("").as_bytes())

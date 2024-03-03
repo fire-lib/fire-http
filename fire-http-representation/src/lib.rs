@@ -4,8 +4,8 @@
 /// Reexport the http crate
 pub use http;
 
-pub mod header;
 pub mod body;
+pub mod header;
 pub use body::Body;
 
 pub mod request;

@@ -1,25 +1,20 @@
-use crate::Args;
-use crate::route::{generate_struct, detect_dyn_uri};
+use crate::route::{detect_dyn_uri, generate_struct};
 use crate::util::{
-	fire_http_crate, validate_signature, validate_inputs, ref_type
+	fire_http_crate, ref_type, validate_inputs, validate_signature,
 };
+use crate::Args;
 
 use proc_macro2::TokenStream;
-use syn::{Result, ItemFn};
-use quote::{quote, format_ident};
+use quote::{format_ident, quote};
+use syn::{ItemFn, Result};
 
-
-pub(crate) fn expand(
-	args: Args,
-	item: ItemFn
-) -> Result<TokenStream> {
+pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 	let fire = fire_http_crate()?;
 
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
 	let input_types = validate_inputs(item.sig.inputs.iter(), false)?;
-
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
@@ -49,7 +44,7 @@ pub(crate) fn expand(
 				Some(reff) => {
 					let elem = &reff.elem;
 					quote!(#fire::ws::util::valid_ws_data_as_ref::<#elem>)
-				},
+				}
 				None => {
 					quote!(#fire::ws::util::valid_ws_data_as_owned::<#ty>)
 				}
@@ -83,11 +78,7 @@ pub(crate) fn expand(
 
 	let call_fn = {
 		let is_async = item.sig.asyncness.is_some();
-		let await_kw = if is_async {
-			quote!(.await)
-		} else {
-			quote!()
-		};
+		let await_kw = if is_async { quote!(.await) } else { quote!() };
 
 		let mut handler_args_vars = vec![];
 		let mut handler_args = vec![];
@@ -97,7 +88,7 @@ pub(crate) fn expand(
 				Some(reff) => {
 					let elem = &reff.elem;
 					quote!(#fire::ws::util::get_ws_data_as_ref::<#elem>)
-				},
+				}
 				None => {
 					quote!(#fire::ws::util::get_ws_data_as_owned::<#ty>)
 				}

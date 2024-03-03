@@ -4,10 +4,9 @@ use syn::LitStr;
 #[cfg(feature = "api")]
 pub(crate) use api::*;
 
-
 #[derive(Debug, Clone)]
 pub(crate) struct Args {
-	pub uri: String
+	pub uri: String,
 }
 
 impl Parse for Args {
@@ -25,10 +24,9 @@ mod api {
 
 	use syn::Type;
 
-
 	#[derive(Clone)]
 	pub(crate) struct ApiArgs {
-		pub ty: Type
+		pub ty: Type,
 	}
 
 	impl Parse for ApiArgs {

@@ -1,19 +1,18 @@
 mod builder;
 pub use builder::RequestBuilder;
 
-use crate::header::{RequestHeader, Uri};
+use crate::body::Body;
 #[cfg(feature = "json")]
 use crate::header::CONTENT_TYPE;
-use crate::body::Body;
+use crate::header::{RequestHeader, Uri};
 
 use std::time::Duration;
-
 
 /// The request that is received from a client.
 #[derive(Debug)]
 pub struct Request {
 	pub header: RequestHeader,
-	pub body: Body
+	pub body: Body,
 }
 
 impl Request {
@@ -48,32 +47,37 @@ impl Request {
 	}
 
 	/// Tries to deserialize the request body.
-	/// 
+	///
 	/// ## Errors
 	/// - If the header `content-type` does not contain `application/json`.
 	/// - If the body does not contain a valid json or some data is missing.
 	#[cfg(feature = "json")]
 	pub async fn deserialize<D>(&mut self) -> Result<D, DeserializeError>
-	where D: serde::de::DeserializeOwned + Send + 'static {
+	where
+		D: serde::de::DeserializeOwned + Send + 'static,
+	{
 		use crate::header::Mime;
 
 		// try to read mime
 		// this will not work if content-type has charset
 		// TODO allow charset (probably implement Parse for ContentType)
-		let raw_content_type = self.header()
+		let raw_content_type = self
+			.header()
 			.value(CONTENT_TYPE)
 			.ok_or(DeserializeError::NoContentType)?;
-		let mime: Mime = raw_content_type.trim().parse()
-			.map_err(|_| DeserializeError::UnknownContentType(
-				raw_content_type.to_string()
-			))?;
+		let mime: Mime = raw_content_type.trim().parse().map_err(|_| {
+			DeserializeError::UnknownContentType(raw_content_type.to_string())
+		})?;
 
 		if mime != Mime::JSON {
-			return Err(DeserializeError::WrongMimeType(mime))
+			return Err(DeserializeError::WrongMimeType(mime));
 		}
 
 		// now parse body
-		self.body.take().deserialize().await
+		self.body
+			.take()
+			.deserialize()
+			.await
 			.map_err(|e| DeserializeError::Reading(e))
 	}
 }
@@ -82,8 +86,7 @@ impl Request {
 mod deserialize_error {
 	use crate::header::Mime;
 
-	use std::{io, fmt};
-
+	use std::{fmt, io};
 
 	#[derive(Debug)]
 	#[non_exhaustive]
@@ -91,7 +94,7 @@ mod deserialize_error {
 		NoContentType,
 		UnknownContentType(String),
 		WrongMimeType(Mime),
-		Reading(io::Error)
+		Reading(io::Error),
 	}
 
 	impl fmt::Display for DeserializeError {

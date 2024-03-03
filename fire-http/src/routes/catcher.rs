@@ -1,9 +1,9 @@
-use crate::util::PinnedFuture;
-use crate::{Request, Response, Data};
 use crate::header::{RequestHeader, ResponseHeader};
+use crate::util::PinnedFuture;
+use crate::{Data, Request, Response};
 
 // Catcher Trait
-pub trait Catcher: Send +  Sync {
+pub trait Catcher: Send + Sync {
 	fn check(&self, req: &RequestHeader, res: &ResponseHeader) -> bool;
 
 	// check if every data you expect is in Data
@@ -13,6 +13,6 @@ pub trait Catcher: Send +  Sync {
 		&'a self,
 		req: &'a mut Request,
 		resp: &'a mut Response,
-		data: &'a Data
+		data: &'a Data,
 	) -> PinnedFuture<'a, crate::Result<()>>;
 }

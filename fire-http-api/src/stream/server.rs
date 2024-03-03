@@ -1,30 +1,29 @@
-use super::stream::{Stream, StreamKind};
-use super::message::{Message, MessageData, MessageKind};
-use super::streamer::RawStreamer;
 use super::error::UnrecoverableError;
+use super::message::{Message, MessageData, MessageKind};
+use super::stream::{Stream, StreamKind};
+use super::streamer::RawStreamer;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::future::poll_fn;
 use std::sync::Arc;
 use std::task::Poll;
-use std::future::poll_fn;
 
 use tokio::sync::mpsc;
 use tokio::time::{interval, Duration};
 
 use tracing::error;
 
-pub use fire::util::PinnedFuture;
-use fire::{Response, Data};
 use fire::header::Method;
-use fire::routes::{RawRoute, HyperRequest};
-use fire::ws::{self, WebSocket, JsonError};
-
+use fire::routes::{HyperRequest, RawRoute};
+pub use fire::util::PinnedFuture;
+use fire::ws::{self, JsonError, WebSocket};
+use fire::{Data, Response};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Request {
 	action: Cow<'static, str>,
-	kind: StreamKind
+	kind: StreamKind,
 }
 
 pub trait IntoStreamHandler {
@@ -38,7 +37,7 @@ pub trait StreamHandler {
 	fn validate_data(&self, _data: &Data) {}
 
 	/// every MessageData needs to correspond with the StreamTrait
-	/// 
+	///
 	/// ## Warning
 	/// Your not allowed to drop streamer before you return from the function
 	/// else that may leed to a busy loop in the StreamServer (todo improve that)
@@ -46,53 +45,53 @@ pub trait StreamHandler {
 		&'a self,
 		req: MessageData,
 		streamer: RawStreamer,
-		data: &'a Data
+		data: &'a Data,
 	) -> PinnedFuture<'a, Result<MessageData, UnrecoverableError>>;
 }
 
 pub struct StreamServer {
 	uri: &'static str,
-	inner: Arc<HashMap<Request, Box<dyn StreamHandler + Send + Sync>>>
+	inner: Arc<HashMap<Request, Box<dyn StreamHandler + Send + Sync>>>,
 }
 
 impl StreamServer {
 	pub fn new(uri: &'static str) -> Self {
 		Self {
 			uri,
-			inner: Arc::new(HashMap::new())
+			inner: Arc::new(HashMap::new()),
 		}
 	}
 
 	pub fn insert<H>(&mut self, handler: H)
 	where
 		H: IntoStreamHandler,
-		H::Handler: StreamHandler + Send + Sync + 'static
+		H::Handler: StreamHandler + Send + Sync + 'static,
 	{
 		Arc::get_mut(&mut self.inner).unwrap().insert(
 			Request {
 				action: H::Stream::ACTION.into(),
-				kind: H::Stream::KIND
+				kind: H::Stream::KIND,
 			},
-			Box::new(handler.into_handler())
+			Box::new(handler.into_handler()),
 		);
 	}
 }
 
 impl RawRoute for StreamServer {
 	fn check(&self, req: &HyperRequest) -> bool {
-		req.method() == Method::GET &&
-		fire::routes::check_static(req.uri().path(), self.uri)
+		req.method() == Method::GET
+			&& fire::routes::check_static(req.uri().path(), self.uri)
 	}
 
 	fn call<'a>(
 		&'a self,
 		req: &'a mut HyperRequest,
-		data: &'a Data
+		data: &'a Data,
 	) -> PinnedFuture<'a, Option<fire::Result<Response>>> {
 		PinnedFuture::new(async move {
 			let (on_upgrade, ws_accept) = match ws::util::upgrade(req) {
 				Ok(o) => o,
-				Err(e) => return Some(Err(e))
+				Err(e) => return Some(Err(e)),
 			};
 
 			let handlers = self.inner.clone();
@@ -107,14 +106,13 @@ impl RawRoute for StreamServer {
 						let ws = WebSocket::new(upgraded).await;
 
 						trace!("connection upgraded");
-						
+
 						let res = handle_connection(handlers, ws, data).await;
 						if let Err(e) = res {
 							error!("websocket connection failed with {:?}", e);
 						}
-
-					},
-					Err(e) => ws::util::upgrade_error(e)
+					}
+					Err(e) => ws::util::upgrade_error(e),
 				}
 			});
 
@@ -126,7 +124,7 @@ impl RawRoute for StreamServer {
 async fn handle_connection(
 	handlers: Arc<HashMap<Request, Box<dyn StreamHandler + Send + Sync>>>,
 	mut ws: WebSocket,
-	data: Data
+	data: Data,
 ) -> Result<(), UnrecoverableError> {
 	let mut receivers = Receivers::new();
 	let mut senders = Senders::new();
@@ -250,14 +248,14 @@ async fn handle_connection(
 								).await;
 							}
 						});
-						
+
 					},
 					MessageKind::SenderMessage => {
 						// if a handler is already closed don't do anything
 						// since it is guaranteed to get closed via close_tx
 						// if a handler does not exist
 						// this is a protocol error since you would get a
-						// a 
+						// a
 						let _ = senders.send(&req, msg.data).await;
 					},
 					MessageKind::ReceiverMessage => {
@@ -319,14 +317,14 @@ struct Receivers {
 	// in the queue
 	// the problem here is that we don't return on the first one and always poll
 	// every future (which is not great)
-	recv_queue: Vec<(Request, MessageData)>
+	recv_queue: Vec<(Request, MessageData)>,
 }
 
 impl Receivers {
 	pub fn new() -> Self {
 		Self {
 			inner: HashMap::new(),
-			recv_queue: vec![]
+			recv_queue: vec![],
 		}
 	}
 
@@ -349,28 +347,29 @@ impl Receivers {
 					Poll::Pending => continue,
 					Poll::Ready(Some(data)) => {
 						self.recv_queue.push((req.clone(), data))
-					},
+					}
 					// todo maybe we should remove those
 					// but since the receiver will probably quickly be removed
 					// it should not be a problem
-					Poll::Ready(None) => continue
+					Poll::Ready(None) => continue,
 				}
 			}
 
 			match self.recv_queue.pop() {
 				Some(m) => Poll::Ready(m),
-				None => Poll::Pending
+				None => Poll::Pending,
 			}
-		}).await
+		})
+		.await
 	}
 
 	pub fn insert(
 		&mut self,
 		req: Request,
-		recv: mpsc::Receiver<MessageData>
+		recv: mpsc::Receiver<MessageData>,
 	) -> bool {
 		if self.inner.contains_key(&req) {
-			return false
+			return false;
 		}
 
 		self.inner.insert(req, recv).is_none()
@@ -382,23 +381,23 @@ impl Receivers {
 }
 
 struct Senders {
-	inner: HashMap<Request, mpsc::Sender<MessageData>>
+	inner: HashMap<Request, mpsc::Sender<MessageData>>,
 }
 
 impl Senders {
 	pub fn new() -> Self {
 		Self {
-			inner: HashMap::new()
+			inner: HashMap::new(),
 		}
 	}
 
 	pub fn insert(
 		&mut self,
 		req: Request,
-		sender: mpsc::Sender<MessageData>
+		sender: mpsc::Sender<MessageData>,
 	) -> bool {
 		if self.inner.contains_key(&req) {
-			return false
+			return false;
 		}
 
 		self.inner.insert(req, sender).is_none()

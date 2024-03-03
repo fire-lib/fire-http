@@ -1,28 +1,27 @@
-mod route;
-mod args;
-#[cfg(feature = "ws")]
-mod ws;
 #[cfg(feature = "api")]
 mod api;
 #[cfg(all(feature = "api", feature = "stream"))]
 mod api_stream;
+mod args;
+mod route;
 mod util;
+#[cfg(feature = "ws")]
+mod ws;
 
-use args::Args;
 #[cfg(feature = "api")]
 use args::ApiArgs;
+use args::Args;
 
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, ItemFn};
-
 
 enum Method {
 	Get,
 	Post,
 	Put,
 	Delete,
-	Head
+	Head,
 }
 
 impl Method {
@@ -32,7 +31,7 @@ impl Method {
 			Self::Post => "POST",
 			Self::Put => "PUT",
 			Self::Delete => "DELETE",
-			Self::Head => "HEAD"
+			Self::Head => "HEAD",
 		}
 	}
 }
@@ -40,7 +39,7 @@ impl Method {
 #[allow(dead_code)]
 enum TransformOutput {
 	No,
-	Json
+	Json,
 }
 
 fn to_compile_error(error: syn::Error) -> TokenStream {
@@ -81,7 +80,6 @@ attribute_route!(post, Post, No);
 attribute_route!(put, Put, No);
 attribute_route!(delete, Delete, No);
 attribute_route!(head, Head, No);
-
 
 attribute_route!(get_json, Get, Json);
 attribute_route!(post_json, Post, Json);

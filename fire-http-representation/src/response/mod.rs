@@ -1,8 +1,8 @@
 mod builder;
 pub use builder::ResponseBuilder;
 
-use crate::header::{ResponseHeader, StatusCode, Mime};
 use crate::body::Body;
+use crate::header::{Mime, ResponseHeader, StatusCode};
 
 /// The response created from a server.
 #[derive(Debug)]
@@ -10,7 +10,7 @@ pub struct Response {
 	pub header: ResponseHeader,
 	// if you overide the body
 	// you should pobably reset the content-length
-	pub body: Body
+	pub body: Body,
 }
 
 impl Response {
@@ -30,7 +30,7 @@ impl Response {
 	}
 
 	/// Takes the body replacing it with an empty one.
-	/// 
+	///
 	/// ## Note
 	/// If you used the builder to create a `Response`
 	/// you should probably reset the `content-length` header.
@@ -39,32 +39,22 @@ impl Response {
 	}
 
 	pub fn text(body: impl Into<Body>) -> Self {
-		Self::builder()
-			.content_type(Mime::TEXT)
-			.body(body)
-			.build()
+		Self::builder().content_type(Mime::TEXT).body(body).build()
 	}
 
 	pub fn html(body: impl Into<Body>) -> Self {
-		Self::builder()
-			.content_type(Mime::HTML)
-			.body(body)
-			.build()
+		Self::builder().content_type(Mime::HTML).body(body).build()
 	}
 }
 
 impl From<Body> for Response {
 	fn from(body: Body) -> Self {
-		Self::builder()
-			.body(body)
-			.build()
+		Self::builder().body(body).build()
 	}
 }
 
 impl From<StatusCode> for Response {
 	fn from(status_code: StatusCode) -> Self {
-		Self::builder()
-			.status_code(status_code)
-			.build()
+		Self::builder().status_code(status_code).build()
 	}
 }

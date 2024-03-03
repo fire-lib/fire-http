@@ -2,16 +2,15 @@ use fire_api as api;
 
 use std::fmt;
 
-use api::{Method, Request};
 use api::error::{ApiError, Error as ErrorTrait, StatusCode};
+use api::{Method, Request};
 
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
 pub enum Error {
 	Internal(String),
-	Request(String)
+	Request(String),
 }
 
 impl ApiError for Error {
@@ -26,7 +25,7 @@ impl ApiError for Error {
 	fn status_code(&self) -> StatusCode {
 		match self {
 			Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-			Self::Request(_) => StatusCode::BAD_REQUEST
+			Self::Request(_) => StatusCode::BAD_REQUEST,
 		}
 	}
 }
@@ -43,7 +42,7 @@ struct NameReq;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Name {
 	firstname: String,
-	lastname: String
+	lastname: String,
 }
 
 impl Request for NameReq {
@@ -58,10 +57,10 @@ impl Request for NameReq {
 async fn get_name(
 	_req: NameReq,
 	_some_data: &Name,
-	_more_data: &NameReq
+	_more_data: &NameReq,
 ) -> Result<Name, Error> {
 	Ok(Name {
 		firstname: "Albert".into(),
-		lastname: "Einstein".into()
+		lastname: "Einstein".into(),
 	})
 }

@@ -1,22 +1,20 @@
-use crate::{Method, TransformOutput};
-use crate::Args;
 use crate::util::{fire_http_crate, validate_signature};
+use crate::Args;
+use crate::{Method, TransformOutput};
 
 use proc_macro2::TokenStream;
-use syn::{Result, Error, ItemFn, FnArg, Type};
-use quote::{quote, format_ident};
-
+use quote::{format_ident, quote};
+use syn::{Error, FnArg, ItemFn, Result, Type};
 
 pub(crate) fn expand(
 	args: Args,
 	item: ItemFn,
 	method: Method,
-	output: TransformOutput
+	output: TransformOutput,
 ) -> Result<TokenStream> {
 	let fire = fire_http_crate()?;
 
 	validate_signature(&item.sig)?;
-
 
 	// parse inputs to get the data types
 	// should ignore request and check that the request gets passed
@@ -29,18 +27,23 @@ pub(crate) fn expand(
 		let ty = match fn_arg {
 			FnArg::Receiver(r) => {
 				return Err(Error::new_spanned(r, "self not allowed"))
-			},
-			FnArg::Typed(t) => &t.ty
+			}
+			FnArg::Typed(t) => &t.ty,
 		};
 
 		let reff = match &**ty {
 			Type::Reference(r) => r,
-			_ => return Err(Error::new_spanned(ty, "route argument needs to be \
-				a reference"))
+			_ => {
+				return Err(Error::new_spanned(
+					ty,
+					"route argument needs to be \
+				a reference",
+				))
+			}
 		};
 
 		if let Some(lifetime) = &reff.lifetime {
-			return Err(Error::new_spanned(lifetime, "lifetimes not allowed"))
+			return Err(Error::new_spanned(lifetime, "lifetimes not allowed"));
 		}
 
 		input_types.push(reff);
@@ -135,7 +138,7 @@ pub(crate) fn expand(
 			TransformOutput::Json => quote!(
 				let ret = #fire::json::IntoRouteResult::into_route_result(ret)?;
 				#fire::json::serialize_to_response(&ret)
-			)
+			),
 		};
 
 		quote!(
@@ -187,8 +190,7 @@ pub(crate) fn generate_struct(item: &ItemFn) -> TokenStream {
 pub(crate) fn detect_dyn_uri(args_uri: &str) -> (bool, String) {
 	let uri = args_uri.strip_suffix('*');
 	let dyn_route = uri.is_some();
-	let uri = uri.unwrap_or_else(|| args_uri)
-		.to_string();
+	let uri = uri.unwrap_or_else(|| args_uri).to_string();
 
 	(dyn_route, uri)
 }

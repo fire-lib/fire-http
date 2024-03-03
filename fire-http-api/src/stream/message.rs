@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MessageKind {
@@ -11,18 +11,18 @@ pub enum MessageKind {
 	SenderClose,
 	ReceiverRequest,
 	ReceiverMessage,
-	ReceiverClose
+	ReceiverClose,
 }
 
 impl MessageKind {
 	pub fn into_close(self) -> Self {
 		match self {
-			Self::SenderRequest |
-			Self::SenderMessage |
-			Self::SenderClose => Self::SenderClose,
-			Self::ReceiverRequest |
-			Self::ReceiverMessage |
-			Self::ReceiverClose => Self::ReceiverClose
+			Self::SenderRequest | Self::SenderMessage | Self::SenderClose => {
+				Self::SenderClose
+			}
+			Self::ReceiverRequest
+			| Self::ReceiverMessage
+			| Self::ReceiverClose => Self::ReceiverClose,
 		}
 	}
 }
@@ -32,31 +32,35 @@ pub struct Message {
 	pub kind: MessageKind,
 	pub action: Cow<'static, str>,
 	#[serde(default = "MessageData::null")]
-	pub data: MessageData
+	pub data: MessageData,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct MessageData {
-	inner: serde_json::Value
+	inner: serde_json::Value,
 }
 
 impl MessageData {
 	pub fn null() -> Self {
 		Self {
-			inner: serde_json::Value::Null
+			inner: serde_json::Value::Null,
 		}
 	}
 
 	pub fn serialize<S>(value: S) -> Result<Self, serde_json::Error>
-	where S: Serialize {
+	where
+		S: Serialize,
+	{
 		Ok(Self {
-			inner: serde_json::to_value(value)?
+			inner: serde_json::to_value(value)?,
 		})
 	}
 
 	pub fn deserialize<T>(self) -> Result<T, serde_json::Error>
-	where T: DeserializeOwned {
+	where
+		T: DeserializeOwned,
+	{
 		serde_json::from_value(self.inner)
 	}
 }

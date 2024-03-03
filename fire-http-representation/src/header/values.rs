@@ -1,16 +1,15 @@
-use std::fmt;
 use std::borrow::Cow;
+use std::fmt;
 
 pub use http::header::{
-	HeaderValue, HeaderName, AsHeaderName, IntoHeaderName, InvalidHeaderValue
+	AsHeaderName, HeaderName, HeaderValue, IntoHeaderName, InvalidHeaderValue,
 };
 
 #[cfg(feature = "json")]
 pub use serde_json::Error as JsonError;
 
-
 /// Contains all http header values.
-/// 
+///
 /// This is really similar to `http::header::HeaderMap` except
 /// that is uses IntoHeaderValue for inserting. And it does not allow
 /// multiples values for a given key.
@@ -29,17 +28,17 @@ impl HeaderValues {
 	}
 
 	/// Insert a new key and value into the header.
-	/// 
+	///
 	/// If a value to this key is already present
 	/// that value is dropped.
-	/// 
+	///
 	/// ## Panics
 	/// If the value is not a valid HeaderValue.
 	pub fn insert<K, V>(&mut self, key: K, val: V) -> Option<HeaderValue>
 	where
 		K: IntoHeaderName,
 		V: TryInto<HeaderValue>,
-		V::Error: fmt::Debug
+		V::Error: fmt::Debug,
 	{
 		let val = val.try_into().expect("invalid HeaderValue");
 		self.0.insert(key, val)
@@ -47,31 +46,27 @@ impl HeaderValues {
 
 	/// Insert a new key and value into the header. Returning
 	/// None if the value is not valid.
-	/// 
+	///
 	/// If a value to this key is already present
 	/// that value is dropped.
 	pub fn try_insert<K, V>(
 		&mut self,
 		key: K,
-		val: V
+		val: V,
 	) -> Result<Option<HeaderValue>, InvalidHeaderValue>
 	where
 		K: IntoHeaderName,
-		V: TryInto<HeaderValue, Error=InvalidHeaderValue>
+		V: TryInto<HeaderValue, Error = InvalidHeaderValue>,
 	{
 		Ok(self.0.insert(key, val.try_into()?))
 	}
 
 	/// Insert a new key and value into the header. Percent encoding
 	/// the value if necessary.
-	pub fn encode_value<K, V>(
-		&mut self,
-		key: K,
-		val: V
-	) -> Option<HeaderValue>
+	pub fn encode_value<K, V>(&mut self, key: K, val: V) -> Option<HeaderValue>
 	where
 		K: IntoHeaderName,
-		V: IntoEncodedHeaderValue
+		V: IntoEncodedHeaderValue,
 	{
 		let val = val.into_encoded_header_value();
 		self.0.insert(key, val)
@@ -79,18 +74,18 @@ impl HeaderValues {
 
 	/// Insert a new key and a serializeable value. The value will be serialized
 	/// as json and percent encoded.
-	/// 
+	///
 	/// Returns `None` if the value could not be serialized or inserted.
 	#[cfg(feature = "json")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
 	pub fn serialize_value<K, V: ?Sized>(
 		&mut self,
 		key: K,
-		val: &V
+		val: &V,
 	) -> Result<Option<HeaderValue>, JsonError>
 	where
 		K: IntoHeaderName,
-		V: serde::Serialize
+		V: serde::Serialize,
 	{
 		let v = serde_json::to_string(val)?;
 		Ok(self.encode_value(key, v))
@@ -98,31 +93,38 @@ impl HeaderValues {
 
 	/// Returns the value if it exists.
 	pub fn get<K>(&self, key: K) -> Option<&HeaderValue>
-	where K: AsHeaderName {
+	where
+		K: AsHeaderName,
+	{
 		self.0.get(key)
 	}
 
 	/// Returns the value mutably if it exists.
 	pub fn get_mut<K>(&mut self, key: K) -> Option<&mut HeaderValue>
-	where K: AsHeaderName {
+	where
+		K: AsHeaderName,
+	{
 		self.0.get_mut(key)
 	}
 
 	/// Returns the value as a string if it exists and is valid.
 	pub fn get_str<K>(&self, key: K) -> Option<&str>
-	where K: AsHeaderName {
+	where
+		K: AsHeaderName,
+	{
 		self.get(key).and_then(|v| v.to_str().ok())
 	}
 
 	/// Returns the value percent decoded as a string if it exists and is valid.
 	pub fn decode_value<K>(&self, key: K) -> Option<Cow<'_, str>>
-	where K: AsHeaderName {
-		self.get(key)
-			.and_then(|v| {
-				percent_encoding::percent_decode(v.as_bytes())
-					.decode_utf8()
-					.ok()
-			})
+	where
+		K: AsHeaderName,
+	{
+		self.get(key).and_then(|v| {
+			percent_encoding::percent_decode(v.as_bytes())
+				.decode_utf8()
+				.ok()
+		})
 	}
 
 	/// Deserializes a given value. Returning `None` if the value
@@ -132,7 +134,7 @@ impl HeaderValues {
 	pub fn deserialize_value<K, D>(&self, key: K) -> Option<D>
 	where
 		K: AsHeaderName,
-		D: serde::de::DeserializeOwned
+		D: serde::de::DeserializeOwned,
 	{
 		let v = self.decode_value(key)?;
 		serde_json::from_str(v.as_ref()).ok()
@@ -144,12 +146,12 @@ impl HeaderValues {
 	}
 }
 
-
 fn encode_to_header_value(s: impl AsRef<[u8]>) -> HeaderValue {
 	let s: String = percent_encoding::percent_encode(
 		s.as_ref(),
-		percent_encoding::CONTROLS
-	).collect();
+		percent_encoding::CONTROLS,
+	)
+	.collect();
 	// does not allocate again
 	let b: bytes::Bytes = s.into();
 	// now lets make a header value
@@ -183,7 +185,7 @@ macro_rules! impl_into_header_value {
 	)*);
 }
 
-impl_into_header_value!{
+impl_into_header_value! {
 	HeaderName, self => self.into(),
 	HeaderValue, self => self,
 	i16, self => self.into(),
@@ -198,23 +200,21 @@ impl_into_header_value!{
 	Vec<u8>, self => encode_to_header_value(self)
 }
 
-impl_into_header_value!{ REF,
+impl_into_header_value! { REF,
 	HeaderValue, self => self.clone(),
 	[u8], self => encode_to_header_value(self),
 	str, self => encode_to_header_value(self)
 }
-
 
 #[cfg(test)]
 mod tests {
 	#![allow(unused_imports)]
 
 	use super::*;
-	use serde::{Serialize, Deserialize};
+	use serde::{Deserialize, Serialize};
 
 	#[test]
 	fn test_encdec() {
-
 		let mut values = HeaderValues::new();
 		values.encode_value("Rocket", "🚀 Rocket");
 		let s = values.get_str("Rocket").unwrap();
@@ -222,23 +222,21 @@ mod tests {
 
 		let s = values.decode_value("Rocket").unwrap();
 		assert_eq!(s, "🚀 Rocket");
-
 	}
 
-	#[cfg(feature="json")]
+	#[cfg(feature = "json")]
 	#[test]
 	fn test_serde() {
-
 		#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 		struct Value {
 			text: String,
-			number: usize
+			number: usize,
 		}
 
 		let mut values = HeaderValues::new();
 		let val = Value {
 			text: "🚀 Rocket".into(),
-			number: 42
+			number: 42,
 		};
 		values.serialize_value("Value", &val).unwrap();
 
@@ -247,7 +245,5 @@ mod tests {
 
 		let n_val: Value = values.deserialize_value("Value").unwrap();
 		assert_eq!(n_val, val);
-
 	}
-
 }

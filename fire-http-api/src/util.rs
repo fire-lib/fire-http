@@ -1,17 +1,17 @@
-use crate::Request;
 use crate::ApiError;
+use crate::Request;
 
-use std::time::Duration;
 use std::any::{Any, TypeId};
-use std::mem::ManuallyDrop;
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
+use std::time::Duration;
 
 use tracing::error;
 
-use fire::{Response, Body, Data};
-use fire::header::{RequestHeader, HeaderValues, Method, StatusCode, Mime};
-use fire::error::{ServerErrorKind};
+use fire::error::ServerErrorKind;
+use fire::header::{HeaderValues, Method, Mime, RequestHeader, StatusCode};
+use fire::{Body, Data, Response};
 
 #[derive(Debug, Clone)]
 pub struct ResponseHeaders(HeaderValues);
@@ -38,39 +38,41 @@ impl DerefMut for ResponseHeaders {
 }
 
 pub fn setup_request<R: Request>(
-	req: &mut fire::Request
+	req: &mut fire::Request,
 ) -> Result<(), R::Error> {
 	req.set_size_limit(Some(R::SIZE_LIMIT));
 	req.set_timeout(Some(Duration::from_secs(R::TIMEOUT as u64)));
 
 	// check headers
-	let headers_missing = R::HEADERS.iter().any(|key| {
-		req.header().value(*key).is_none()
-	});
+	let headers_missing = R::HEADERS
+		.iter()
+		.any(|key| req.header().value(*key).is_none());
 	if headers_missing {
-		return Err(R::Error::request(
-			format!("some headers are missing {:?}", R::HEADERS)
-		))
+		return Err(R::Error::request(format!(
+			"some headers are missing {:?}",
+			R::HEADERS
+		)));
 	}
 
 	Ok(())
 }
 
 pub async fn deserialize_req<R: Request + Send + 'static>(
-	req: &mut fire::Request
+	req: &mut fire::Request,
 ) -> Result<R, R::Error> {
 	// since a get request does not have a body let's just mark the body as null
 	if R::METHOD == Method::GET {
 		serde_json::from_value(serde_json::Value::Null)
 			.map_err(|e| R::Error::request(format!("malformed request {e}")))
 	} else {
-		req.deserialize().await
+		req.deserialize()
+			.await
 			.map_err(|e| R::Error::request(format!("malformed request {e}")))
 	}
 }
 
 pub fn serialize_resp<R: Request>(
-	resp: &R::Response
+	resp: &R::Response,
 ) -> Result<Body, R::Error> {
 	Body::serialize(resp)
 		.map_err(|e| R::Error::internal(format!("malformed response {e}")))
@@ -78,18 +80,16 @@ pub fn serialize_resp<R: Request>(
 
 /// todo find a better name
 pub fn transform_body_to_response<R: Request>(
-	res: Result<(ResponseHeaders, Body), R::Error>
+	res: Result<(ResponseHeaders, Body), R::Error>,
 ) -> fire::Result<Response> {
 	let (status, headers, body) = match res {
 		Ok((headers, body)) => (StatusCode::OK, headers.0, body),
 		Err(e) => {
 			error!("request handle error: {:?}", e);
 
-			let body = Body::serialize(&e)
-				.map_err(|e| fire::Error::new(
-					ServerErrorKind::InternalServerError,
-					e
-				))?;
+			let body = Body::serialize(&e).map_err(|e| {
+				fire::Error::new(ServerErrorKind::InternalServerError, e)
+			})?;
 
 			(e.status_code(), HeaderValues::new(), body)
 		}
@@ -114,7 +114,6 @@ macro_rules! trace {
 	)
 }
 
-
 fn is_req<T: Any, R: Any>() -> bool {
 	TypeId::of::<T>() == TypeId::of::<R>()
 }
@@ -134,8 +133,11 @@ fn is_data<T: Any>() -> bool {
 /// fn to check if a type can be accessed in a route as reference
 #[inline]
 pub fn valid_route_data_as_ref<T: Any, R: Any>(data: &Data) -> bool {
-	is_req::<T, R>() || is_header::<T>() || is_resp::<T>() || is_data::<T>() ||
-	data.exists::<T>()
+	is_req::<T, R>()
+		|| is_header::<T>()
+		|| is_resp::<T>()
+		|| is_data::<T>()
+		|| data.exists::<T>()
 }
 
 /// fn to check if a type can be accessed in a route as mutable reference
@@ -152,13 +154,13 @@ pub fn valid_route_data_as_owned<T: Any, R: Any>(_data: &Data) -> bool {
 
 #[doc(hidden)]
 pub struct DataManager<T> {
-	inner: RefCell<Option<T>>
+	inner: RefCell<Option<T>>,
 }
 
 impl<T> DataManager<T> {
 	pub fn new(val: T) -> Self {
 		Self {
-			inner: RefCell::new(Some(val))
+			inner: RefCell::new(Some(val)),
 		}
 	}
 
@@ -177,9 +179,9 @@ impl<T> DataManager<T> {
 		let r = ManuallyDrop::new(r);
 		// since the borrow counter does not get decreased because of the
 		// ManuallyDrop and the lifetime not getting expanded this is safe
-		unsafe {
-			&*(r.deref().deref() as *const Option<T>)
-		}.as_ref().unwrap()
+		unsafe { &*(r.deref().deref() as *const Option<T>) }
+			.as_ref()
+			.unwrap()
 	}
 
 	/// ## Panics
@@ -190,9 +192,9 @@ impl<T> DataManager<T> {
 		let mut r = ManuallyDrop::new(r);
 		// since the borrow counter does not get decreased because of the
 		// ManuallyDrop and the lifetime not getting expanded this is safe
-		unsafe {
-			&mut *(r.deref_mut().deref_mut() as *mut Option<T>)
-		}.as_mut().unwrap()
+		unsafe { &mut *(r.deref_mut().deref_mut() as *mut Option<T>) }
+			.as_mut()
+			.unwrap()
 	}
 
 	/// ##Panics
@@ -208,7 +210,7 @@ pub fn get_route_data_as_ref<'a, T: Any, R: Any>(
 	data: &'a Data,
 	header: &'a RequestHeader,
 	req: &'a DataManager<R>,
-	resp: &'a DataManager<ResponseHeaders>
+	resp: &'a DataManager<ResponseHeaders>,
 ) -> &'a T {
 	if is_req::<T, R>() {
 		let req = req.as_ref();
@@ -230,7 +232,7 @@ pub fn get_route_data_as_mut<'a, T: Any, R: Any>(
 	_data: &'a Data,
 	_header: &'a RequestHeader,
 	req: &'a DataManager<R>,
-	resp: &'a DataManager<ResponseHeaders>
+	resp: &'a DataManager<ResponseHeaders>,
 ) -> &'a mut T {
 	if is_req::<T, R>() {
 		let req = req.as_mut();
@@ -248,13 +250,11 @@ pub fn get_route_data_as_owned<T: Any, R: Any>(
 	_data: &Data,
 	_header: &RequestHeader,
 	req: &DataManager<R>,
-	_resp: &DataManager<ResponseHeaders>
+	_resp: &DataManager<ResponseHeaders>,
 ) -> T {
 	if is_req::<T, R>() {
 		let req = req.take();
-		unsafe {
-			transform_owned::<T, R>(req)
-		}
+		unsafe { transform_owned::<T, R>(req) }
 	} else {
 		unreachable!()
 	}

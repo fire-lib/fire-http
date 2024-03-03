@@ -1,6 +1,5 @@
-use fire_http as fire;
 use fire::get;
-
+use fire_http as fire;
 
 #[get("/")]
 fn hello_world() -> &'static str {
@@ -9,7 +8,8 @@ fn hello_world() -> &'static str {
 
 #[tokio::main]
 async fn main() {
-	let mut server = fire::build("0.0.0.0:3000").await
+	let mut server = fire::build("0.0.0.0:3000")
+		.await
 		.expect("Address could not be parsed");
 
 	server.add_route(hello_world);

@@ -5,7 +5,7 @@ pub use fire::header::StatusCode;
 use serde::Serialize;
 
 /// Basic error trait which implements Debug + Display + Serialize
-/// 
+///
 /// The usefulness is still undecided
 pub trait Error: Debug + Display + Serialize {}
 

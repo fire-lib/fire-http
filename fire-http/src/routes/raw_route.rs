@@ -1,5 +1,5 @@
 use crate::util::PinnedFuture;
-use crate::{Response, Data};
+use crate::{Data, Response};
 
 pub use crate::server::HyperRequest;
 
@@ -16,6 +16,6 @@ pub trait RawRoute: Send + Sync {
 	fn call<'a>(
 		&'a self,
 		req: &'a mut HyperRequest,
-		data: &'a Data
+		data: &'a Data,
 	) -> PinnedFuture<'a, Option<crate::Result<Response>>>;
 }
