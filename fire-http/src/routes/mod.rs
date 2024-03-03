@@ -67,7 +67,6 @@ impl Routes {
 	}
 
 	pub fn route(&self, request_header: &RequestHeader) -> Option<&BoxedRoute> {
-		eprintln!("route {request_header:?}");
 		for route in &self.basic {
 			if route.check(request_header) {
 				return Some(route);
