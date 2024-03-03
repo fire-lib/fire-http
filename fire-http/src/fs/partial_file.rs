@@ -5,8 +5,6 @@ use crate::header::{
 use crate::into::IntoResponse;
 use crate::{Body, Response};
 
-use std::convert::AsRef;
-use std::convert::TryInto;
 use std::fmt;
 use std::io::SeekFrom;
 use std::path::Path;
@@ -64,7 +62,10 @@ pub fn serve_memory_partial_file(
 	let end = range.end.unwrap_or(size - 1);
 
 	if end >= size || start >= end {
-		return Err(io::Error::new(io::ErrorKind::Other, RangeIncorrect(range)));
+		return Err(io::Error::new(
+			io::ErrorKind::Other,
+			RangeIncorrect(range),
+		));
 	}
 
 	let len = (end + 1) - start;
@@ -144,7 +145,7 @@ impl PartialFile {
 }
 
 #[derive(Debug)]
-pub struct RangeIncorrect(Range);
+pub struct RangeIncorrect(pub Range);
 
 impl fmt::Display for RangeIncorrect {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

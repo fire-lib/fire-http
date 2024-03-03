@@ -2,7 +2,6 @@ use crate::header::{Mime, CONTENT_LENGTH};
 use crate::into::IntoResponse;
 use crate::{Body, Response};
 
-use std::convert::AsRef;
 use std::path::Path;
 
 use tokio::{fs, io};

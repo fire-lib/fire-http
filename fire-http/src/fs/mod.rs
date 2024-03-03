@@ -3,7 +3,6 @@ use crate::Response;
 
 use tokio::io;
 
-use std::convert::AsRef;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::Utf8Error;
