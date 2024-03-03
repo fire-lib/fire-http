@@ -1,13 +1,13 @@
 [package]
 name = "fire-http-representation"
 description = "Http types for the fire http crate"
-version = "0.2.3"
+version = "0.3.0"
 authors = ["Sören Meier <info@s-me.ch>"]
 repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 categories = ["web-programming"]
-rust-version = "1.67"
+rust-version = "1.69"
 
 [features]
 json = ["serde", "serde_json"]
@@ -19,8 +19,8 @@ futures-core = "0.3"
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", features = ["io", "io-util"] }
 pin-project-lite = "0.2"
-http = "0.2"
-hyper = "0.14"
+http = "1.0"
+hyper = "1.2"
 serde = { version = "1.0", optional = true }
 serde_json = { version = "1.0", optional = true }
 percent-encoding = "2.2"
@@ -28,7 +28,6 @@ form_urlencoded = "1.1"
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["io-util", "macros", "rt-multi-thread"] }
-hyper = "0.14"
 serde = { version = "1.0", features = ["derive"] }
 
 [package.metadata.docs.rs]

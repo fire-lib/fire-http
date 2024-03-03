@@ -25,6 +25,7 @@ use tokio::task;
 use futures_core::Stream as AsyncStream;
 
 use bytes::Bytes;
+use hyper::body::Incoming;
 
 type PinnedAsyncRead = Pin<Box<dyn AsyncRead + Send + Sync>>;
 type BoxedSyncRead = Box<dyn SyncRead + Send + Sync>;
@@ -35,7 +36,7 @@ enum Inner {
 	Empty,
 	// Bytes will never be empty
 	Bytes(Bytes),
-	Hyper(hyper::Body),
+	Hyper(Incoming),
 	SyncReader(BoxedSyncRead),
 	AsyncReader(PinnedAsyncRead),
 	AsyncBytesStreamer(PinnedAsyncBytesStream),
@@ -105,8 +106,8 @@ impl Body {
 		}
 	}
 
-	/// Creates a new Body from a `hyper::Body`.
-	pub fn from_hyper(body: hyper::Body) -> Self {
+	/// Creates a new Body from a `hyper::body::Incoming`.
+	pub fn from_hyper(body: Incoming) -> Self {
 		Self::new_inner(Inner::Hyper(body))
 	}
 
@@ -284,8 +285,8 @@ impl From<&'static str> for Body {
 	}
 }
 
-impl From<hyper::Body> for Body {
-	fn from(i: hyper::Body) -> Self {
+impl From<Incoming> for Body {
+	fn from(i: Incoming) -> Self {
 		Self::from_hyper(i)
 	}
 }
