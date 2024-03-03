@@ -39,7 +39,7 @@ pub mod ws;
 pub mod graphql;
 
 pub mod service {
-	pub use crate::server::{FireService, MakeFireService};
+	pub use crate::server::FireService;
 }
 
 use std::any::Any;
@@ -183,12 +183,16 @@ impl FireBuilder {
 		tokio::spawn(async move { self.ignite().await.unwrap() })
 	}
 
-	/// Creates a tower service which can be used to build a manual hyper
-	/// server. Unless you wan't to use a custom transport layer don't use this.
-	pub fn into_make_fire_service(self) -> service::MakeFireService {
+	/// Creates a FirePit without starting the server.
+	///
+	/// In most cases you should use `build` and then call `pit` on the `Fire`.
+	///
+	/// Creating a `FirePit` might be useful for testing or if you want to
+	/// manually create a server.
+	pub fn into_pit(self) -> FirePit {
 		let wood = Arc::new(Wood::new(self.data, self.routes, self.configs));
 
-		service::MakeFireService { wood }
+		FirePit { wood }
 	}
 }
 

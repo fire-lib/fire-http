@@ -2,6 +2,7 @@
 
 use fire::Body;
 use fire_http as fire;
+use hyper_util::rt::TokioExecutor;
 use types::body::BodyHttp;
 
 use std::io;
@@ -29,10 +30,15 @@ macro_rules! other_err {
 
 pub async fn send_request(
 	req: hyper::Request<BodyHttp>,
-) -> io::Result<hyper::Response<hyper::Body>> {
-	let client = hyper::Client::builder().build_http();
+) -> io::Result<hyper::Response<hyper::body::Incoming>> {
+	let client =
+		hyper_util::client::legacy::Client::builder(TokioExecutor::new())
+			.build_http();
 
-	client.request(req).await.map_err(|e| other_err!(e))
+	client
+		.request(req.map(Box::pin))
+		.await
+		.map_err(|e| other_err!(e))
 }
 
 macro_rules! make_request {

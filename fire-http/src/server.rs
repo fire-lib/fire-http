@@ -3,23 +3,26 @@ use crate::util::PinnedFuture;
 use crate::{Error, FirePit, Result};
 
 use std::convert::Infallible;
-use std::future;
 use std::net::SocketAddr;
 use std::result::Result as StdResult;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder;
 use types::body::BodyHttp;
 
-use hyper::server::conn::{AddrIncoming, AddrStream};
+use hyper::body::Incoming;
 use hyper::service::Service;
 use hyper::Response;
 
-pub type HyperRequest = hyper::Request<hyper::Body>;
+pub type HyperRequest = hyper::Request<Incoming>;
+
+use tokio::net::TcpListener;
 
 // todo replace this function once hyper-util is ready
 pub(crate) struct Server {
-	listener: hyper::Server<AddrIncoming, MakeFireService>,
+	listener: TcpListener,
+	wood: Arc<Wood>,
 }
 
 impl Server {
@@ -27,59 +30,41 @@ impl Server {
 		addr: SocketAddr,
 		wood: Arc<Wood>,
 	) -> Result<Self> {
-		let listener = hyper::Server::try_bind(&addr)
-			.map_err(Error::from_server_error)?
-			.serve(MakeFireService { wood });
-		Ok(Self { listener })
+		let listener = TcpListener::bind(&addr)
+			.await
+			.map_err(Error::from_server_error)?;
+
+		Ok(Self { listener, wood })
 	}
 
 	pub fn local_addr(&self) -> Result<SocketAddr> {
-		Ok(self.listener.local_addr())
+		self.listener.local_addr().map_err(Error::from_server_error)
 	}
 
 	pub async fn serve(self) -> Result<()> {
-		self.listener.await.map_err(Error::from_server_error)
-	}
-}
+		loop {
+			let (stream, address) = self
+				.listener
+				.accept()
+				.await
+				.map_err(Error::from_server_error)?;
 
-/// A `tower::Service` to be used with the `hyper::Server`
-pub struct MakeFireService {
-	pub(crate) wood: Arc<Wood>,
-}
+			let io = TokioIo::new(stream);
 
-impl MakeFireService {
-	pub fn pit(&self) -> FirePit {
-		FirePit {
-			wood: self.wood.clone(),
+			let service = FireService {
+				wood: self.wood.clone(),
+				address,
+			};
+
+			tokio::task::spawn(async move {
+				if let Err(err) = Builder::new(TokioExecutor::new())
+					.serve_connection_with_upgrades(io, service)
+					.await
+				{
+					tracing::error!("Error serving connection: {:?}", err);
+				}
+			});
 		}
-	}
-
-	pub fn make(&self, address: SocketAddr) -> FireService {
-		FireService {
-			wood: self.wood.clone(),
-			address,
-		}
-	}
-}
-
-impl<'a> Service<&'a AddrStream> for MakeFireService {
-	type Response = FireService;
-	type Error = Infallible;
-	type Future = future::Ready<StdResult<FireService, Infallible>>;
-
-	fn poll_ready(
-		&mut self,
-		_: &mut Context,
-	) -> Poll<StdResult<(), Infallible>> {
-		Poll::Ready(Ok(()))
-	}
-
-	fn call(&mut self, addr_stream: &'a AddrStream) -> Self::Future {
-		let address = addr_stream.remote_addr();
-		future::ready(Ok(FireService {
-			wood: self.wood.clone(),
-			address,
-		}))
 	}
 }
 
@@ -88,19 +73,22 @@ pub struct FireService {
 	address: SocketAddr,
 }
 
+impl FireService {
+	/// Creates a new FireService which can be passed to a hyper server.
+	pub fn new(pit: FirePit, address: SocketAddr) -> Self {
+		Self {
+			wood: pit.wood,
+			address,
+		}
+	}
+}
+
 impl Service<HyperRequest> for FireService {
 	type Response = Response<BodyHttp>;
 	type Error = Infallible;
 	type Future = PinnedFuture<'static, StdResult<Self::Response, Self::Error>>;
 
-	fn poll_ready(
-		&mut self,
-		_: &mut Context,
-	) -> Poll<StdResult<(), Infallible>> {
-		Poll::Ready(Ok(()))
-	}
-
-	fn call(&mut self, req: HyperRequest) -> Self::Future {
+	fn call(&self, req: HyperRequest) -> Self::Future {
 		let wood = self.wood.clone();
 		let address = self.address;
 		PinnedFuture::new(async move {

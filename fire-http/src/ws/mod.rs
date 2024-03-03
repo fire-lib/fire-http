@@ -4,6 +4,7 @@ pub mod util;
 use std::fmt;
 use std::str::Utf8Error;
 
+use hyper_util::rt::TokioIo;
 use tracing::warn;
 
 #[doc(hidden)]
@@ -109,14 +110,14 @@ impl From<Message> for ProtMessage {
 
 #[derive(Debug)]
 pub struct WebSocket {
-	inner: WebSocketStream<upgrade::Upgraded>,
+	inner: WebSocketStream<TokioIo<upgrade::Upgraded>>,
 }
 
 impl WebSocket {
 	pub async fn new(upgraded: upgrade::Upgraded) -> Self {
 		Self {
 			inner: WebSocketStream::from_raw_socket(
-				upgraded,
+				TokioIo::new(upgraded),
 				Role::Server,
 				None,
 			)
@@ -126,7 +127,9 @@ impl WebSocket {
 
 	// used for tests
 	#[doc(hidden)]
-	pub fn from_raw(inner: WebSocketStream<upgrade::Upgraded>) -> Self {
+	pub fn from_raw(
+		inner: WebSocketStream<TokioIo<upgrade::Upgraded>>,
+	) -> Self {
 		Self { inner }
 	}
 

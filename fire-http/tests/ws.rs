@@ -6,6 +6,8 @@ use fire_http as fire;
 use tokio_tungstenite::tungstenite::protocol::Role;
 use tokio_tungstenite::WebSocketStream;
 
+use hyper_util::rt::TokioIo;
+
 #[macro_use]
 mod util;
 
@@ -46,8 +48,12 @@ macro_rules! ws_client {
 			.expect("could not upgrade connection");
 
 		let mut $ws = WebSocket::from_raw(
-			WebSocketStream::from_raw_socket(upgraded, Role::Client, None)
-				.await,
+			WebSocketStream::from_raw_socket(
+				TokioIo::new(upgraded),
+				Role::Client,
+				None,
+			)
+			.await,
 		);
 		let _ = async move { $block }.await;
 	};
