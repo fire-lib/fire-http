@@ -6,6 +6,7 @@
 pub mod util;
 pub mod error;
 mod request;
+pub mod response;
 #[cfg(feature = "stream")]
 #[cfg_attr(docsrs, doc(cfg(feature = "feature")))]
 pub mod stream;

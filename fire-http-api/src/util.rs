@@ -1,3 +1,4 @@
+use crate::response::ResponseHeaders;
 use crate::ApiError;
 use crate::Request;
 
@@ -12,30 +13,6 @@ use tracing::error;
 use fire::error::ServerErrorKind;
 use fire::header::{HeaderValues, Method, Mime, RequestHeader, StatusCode};
 use fire::{Body, Data, Response};
-
-#[derive(Debug, Clone)]
-pub struct ResponseHeaders(HeaderValues);
-
-impl ResponseHeaders {
-	#[doc(hidden)]
-	pub fn new() -> Self {
-		Self(HeaderValues::new())
-	}
-}
-
-impl Deref for ResponseHeaders {
-	type Target = HeaderValues;
-
-	fn deref(&self) -> &HeaderValues {
-		&self.0
-	}
-}
-
-impl DerefMut for ResponseHeaders {
-	fn deref_mut(&mut self) -> &mut HeaderValues {
-		&mut self.0
-	}
-}
 
 pub fn setup_request<R: Request>(
 	req: &mut fire::Request,
