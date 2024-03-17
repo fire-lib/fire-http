@@ -125,6 +125,7 @@ pub use deserialize_error::*;
 
 #[cfg(test)]
 mod tests {
+	#[allow(unused_imports)]
 	use super::*;
 
 	#[cfg(feature = "query")]
