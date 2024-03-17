@@ -1,5 +1,9 @@
+// todo if this should ever be used outside of testing the uri parameter
+// should be replaced with a hashmap or something simiar
+
 use crate::error::ApiError;
 
+use fire::routes::ParamsNames;
 use serde::de::DeserializeOwned;
 
 use fire::header::{HeaderValues, Mime, StatusCode};
@@ -36,11 +40,30 @@ impl FirePitApi {
 		R::Error: DeserializeOwned + Send + 'static,
 		R::Response: Send + 'static,
 	{
-		self.request_with_header(req, HeaderValues::new()).await
+		let params = ParamsNames::parse(R::PATH);
+		assert!(params.is_empty(), "path parameters are not allowed");
+
+		self.request_with_header(R::PATH, req, HeaderValues::new())
+			.await
+	}
+
+	pub async fn request_with_uri<R>(
+		&self,
+		uri: impl AsRef<str>,
+		req: &R,
+	) -> Result<R::Response, R::Error>
+	where
+		R: crate::Request,
+		R::Error: DeserializeOwned + Send + 'static,
+		R::Response: Send + 'static,
+	{
+		self.request_with_header(uri.as_ref(), req, HeaderValues::new())
+			.await
 	}
 
 	pub async fn request_with_header<R>(
 		&self,
+		uri: impl AsRef<str>,
 		req: &R,
 		header: HeaderValues,
 	) -> Result<R::Response, R::Error>
@@ -50,7 +73,7 @@ impl FirePitApi {
 		R::Response: Send + 'static,
 	{
 		let mut raw_req =
-			Request::builder(R::PATH.parse().unwrap()).method(R::METHOD);
+			Request::builder(uri.as_ref().parse().unwrap()).method(R::METHOD);
 		*raw_req.values_mut() = header;
 		let mut req = raw_req
 			.content_type(Mime::JSON)

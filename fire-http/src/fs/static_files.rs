@@ -2,9 +2,9 @@ use super::{with_file, with_partial_file};
 use super::{Caching, IntoPathBuf, Range};
 
 use crate::error::ClientErrorKind;
-use crate::header::{Method, RequestHeader, StatusCode};
+use crate::header::{Method, StatusCode};
 use crate::into::{IntoResponse, IntoRoute};
-use crate::routes::{check_static, Route};
+use crate::routes::{ParamsNames, PathParams, Route, RoutePath};
 use crate::util::PinnedFuture;
 use crate::{Data, Error, Request, Response};
 
@@ -184,7 +184,7 @@ impl IntoRoute for StaticFilesOwned {
 
 	fn into_route(self) -> StaticFilesRoute {
 		StaticFilesRoute {
-			uri: self.uri.into(),
+			uri: self.uri.trim_end_matches('/').to_string().into(),
 			path: self.path.into(),
 			caching: self.caching.into(),
 		}
@@ -193,22 +193,26 @@ impl IntoRoute for StaticFilesOwned {
 
 #[doc(hidden)]
 pub struct StaticFilesRoute {
+	// should not end with a trailing slash
 	uri: Cow<'static, str>,
 	path: Cow<'static, str>,
 	caching: Option<Caching>,
 }
 
 impl Route for StaticFilesRoute {
-	fn check(&self, header: &RequestHeader) -> bool {
-		header.method() == &Method::GET
-			&& header.uri().path().starts_with(&*self.uri)
-	}
+	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
 
-	fn validate_data(&self, _data: &Data) {}
+	fn path(&self) -> RoutePath {
+		RoutePath {
+			method: Some(Method::GET),
+			path: format!("{}/{{*rem}}", self.uri).into(),
+		}
+	}
 
 	fn call<'a>(
 		&'a self,
 		req: &'a mut Request,
+		_params: &'a PathParams,
 		_: &'a Data,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		let uri = &self.uri;
@@ -287,7 +291,7 @@ impl IntoRoute for StaticFile {
 
 	fn into_route(self) -> StaticFileRoute {
 		StaticFileRoute {
-			uri: self.uri.into(),
+			uri: self.uri.trim_end_matches('/').into(),
 			path: self.path.into(),
 			caching: self.caching.into(),
 		}
@@ -367,17 +371,20 @@ pub struct StaticFileRoute {
 }
 
 impl Route for StaticFileRoute {
-	fn check(&self, header: &RequestHeader) -> bool {
-		header.method() == &Method::GET
-			&& check_static(header.uri().path(), &*self.uri)
-	}
+	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
 
-	fn validate_data(&self, _data: &Data) {}
+	fn path(&self) -> RoutePath {
+		RoutePath {
+			method: Some(Method::GET),
+			path: self.uri.clone(),
+		}
+	}
 
 	fn call<'a>(
 		&'a self,
 		req: &'a mut Request,
-		_: &'a Data,
+		_params: &'a PathParams,
+		_data: &'a Data,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		PinnedFuture::new(async move {
 			serve_file(&*self.path, &req, self.caching.clone())

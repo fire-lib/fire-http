@@ -8,10 +8,12 @@ use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
+use fire::routes::ParamsNames;
 use tracing::error;
 
 use fire::error::ServerErrorKind;
 use fire::header::{HeaderValues, Method, Mime, RequestHeader, StatusCode};
+use fire::routes::PathParams;
 use fire::{Body, Data, Response};
 
 pub fn setup_request<R: Request>(
@@ -107,25 +109,47 @@ fn is_data<T: Any>() -> bool {
 	TypeId::of::<T>() == TypeId::of::<Data>()
 }
 
+fn is_path_params<T: Any>() -> bool {
+	TypeId::of::<T>() == TypeId::of::<PathParams>()
+}
+
+fn is_string<T: Any>() -> bool {
+	TypeId::of::<T>() == TypeId::of::<String>()
+}
+
 /// fn to check if a type can be accessed in a route as reference
 #[inline]
-pub fn valid_route_data_as_ref<T: Any, R: Any>(data: &Data) -> bool {
+pub fn valid_route_data_as_ref<T: Any, R: Any>(
+	name: &str,
+	params: &ParamsNames,
+	data: &Data,
+) -> bool {
 	is_req::<T, R>()
 		|| is_header::<T>()
 		|| is_resp::<T>()
 		|| is_data::<T>()
+		|| is_path_params::<T>()
+		|| (params.exists(name) && is_string::<T>())
 		|| data.exists::<T>()
 }
 
 /// fn to check if a type can be accessed in a route as mutable reference
 #[inline]
-pub fn valid_route_data_as_mut<T: Any, R: Any>(_data: &Data) -> bool {
+pub fn valid_route_data_as_mut<T: Any, R: Any>(
+	_name: &str,
+	_params: &ParamsNames,
+	_data: &Data,
+) -> bool {
 	is_req::<T, R>() || is_resp::<T>()
 }
 
 /// fn to check if a type can be accessed in a route as mutable reference
 #[inline]
-pub fn valid_route_data_as_owned<T: Any, R: Any>(_data: &Data) -> bool {
+pub fn valid_route_data_as_owned<T: Any, R: Any>(
+	_name: &str,
+	_params: &ParamsNames,
+	_data: &Data,
+) -> bool {
 	is_req::<T, R>()
 }
 
@@ -184,10 +208,12 @@ impl<T> DataManager<T> {
 
 #[inline]
 pub fn get_route_data_as_ref<'a, T: Any, R: Any>(
-	data: &'a Data,
-	header: &'a RequestHeader,
+	name: &str,
 	req: &'a DataManager<R>,
+	header: &'a RequestHeader,
+	params: &'a PathParams,
 	resp: &'a DataManager<ResponseHeaders>,
+	data: &'a Data,
 ) -> &'a T {
 	if is_req::<T, R>() {
 		let req = req.as_ref();
@@ -199,6 +225,10 @@ pub fn get_route_data_as_ref<'a, T: Any, R: Any>(
 		<dyn Any>::downcast_ref(resp).unwrap()
 	} else if is_data::<T>() {
 		<dyn Any>::downcast_ref(data).unwrap()
+	} else if is_path_params::<T>() {
+		<dyn Any>::downcast_ref::<T>(params).unwrap()
+	} else if params.exists(name) && is_string::<T>() {
+		<dyn Any>::downcast_ref::<T>(params.get(name).unwrap()).unwrap()
 	} else {
 		data.get::<T>().unwrap()
 	}
@@ -206,10 +236,12 @@ pub fn get_route_data_as_ref<'a, T: Any, R: Any>(
 
 #[inline]
 pub fn get_route_data_as_mut<'a, T: Any, R: Any>(
-	_data: &'a Data,
-	_header: &'a RequestHeader,
+	_name: &str,
 	req: &'a DataManager<R>,
+	_header: &'a RequestHeader,
+	_params: &'a PathParams,
 	resp: &'a DataManager<ResponseHeaders>,
+	_data: &'a Data,
 ) -> &'a mut T {
 	if is_req::<T, R>() {
 		let req = req.as_mut();
@@ -223,11 +255,13 @@ pub fn get_route_data_as_mut<'a, T: Any, R: Any>(
 }
 
 #[inline]
-pub fn get_route_data_as_owned<T: Any, R: Any>(
-	_data: &Data,
-	_header: &RequestHeader,
-	req: &DataManager<R>,
-	_resp: &DataManager<ResponseHeaders>,
+pub fn get_route_data_as_owned<'a, T: Any, R: Any>(
+	_name: &str,
+	req: &'a DataManager<R>,
+	_header: &'a RequestHeader,
+	_params: &'a PathParams,
+	_resp: &'a DataManager<ResponseHeaders>,
+	_data: &'a Data,
 ) -> T {
 	if is_req::<T, R>() {
 		let req = req.take();

@@ -96,8 +96,11 @@ pub(crate) async fn route_hyper_req(
 
 	// route raw_routes
 	// response is Option<Response>
-	let resp = if let Some(route) = wood.routes().route_raw(&hyper_req) {
-		let res = route.call(&mut hyper_req, wood.data()).await;
+	let resp = if let Some((route, params)) = wood
+		.routes()
+		.route_raw(hyper_req.method(), hyper_req.uri().path())
+	{
+		let res = route.call(&mut hyper_req, &params, wood.data()).await;
 		match res {
 			Some(Ok(res)) => Some(res),
 			Some(Err(e)) => {
@@ -159,11 +162,11 @@ pub(crate) async fn route(
 	req: &mut Request,
 ) -> Option<Result<Response, Error>> {
 	// first response
-	let r = wood
+	let (route, params) = wood
 		.routes()
-		.route(req.header())?
-		.call(req, wood.data())
-		.await;
+		.route(&req.header().method, req.header().uri().path())?;
+
+	let r = route.call(req, &params, wood.data()).await;
 
 	Some(r)
 }

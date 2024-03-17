@@ -4,6 +4,7 @@ use crate::header::{
 	StatusCode, CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY,
 	SEC_WEBSOCKET_VERSION, UPGRADE,
 };
+use crate::routes::{ParamsNames, PathParams};
 use crate::server::HyperRequest;
 use crate::{Data, Response, Result};
 
@@ -30,15 +31,35 @@ fn is_data<T: Any>() -> bool {
 	TypeId::of::<T>() == TypeId::of::<Data>()
 }
 
+fn is_path_params<T: Any>() -> bool {
+	TypeId::of::<T>() == TypeId::of::<PathParams>()
+}
+
+fn is_string<T: Any>() -> bool {
+	TypeId::of::<T>() == TypeId::of::<String>()
+}
+
 /// fn to check if a type can be accessed in a websocket handler as reference
 #[inline]
-pub fn valid_ws_data_as_ref<T: Any>(data: &Data) -> bool {
-	is_ws::<T>() || is_data::<T>() || data.exists::<T>()
+pub fn valid_ws_data_as_ref<T: Any>(
+	name: &str,
+	params: &ParamsNames,
+	data: &Data,
+) -> bool {
+	is_ws::<T>()
+		|| is_data::<T>()
+		|| is_path_params::<T>()
+		|| (params.exists(name) && is_string::<T>())
+		|| data.exists::<T>()
 }
 
 /// fn to check if a type can be accessed in a websocket handler as owned
 #[inline]
-pub fn valid_ws_data_as_owned<T: Any>(_: &Data) -> bool {
+pub fn valid_ws_data_as_owned<T: Any>(
+	_name: &str,
+	_params: &ParamsNames,
+	_data: &Data,
+) -> bool {
 	is_ws::<T>()
 }
 
@@ -81,14 +102,20 @@ impl<T> DataManager<T> {
 
 #[inline]
 pub fn get_ws_data_as_ref<'a, T: Any>(
-	data: &'a Data,
+	name: &str,
 	ws: &'a DataManager<WebSocket>,
+	params: &'a PathParams,
+	data: &'a Data,
 ) -> &'a T {
 	if is_ws::<T>() {
 		let ws = ws.as_ref();
 		<dyn Any>::downcast_ref(ws).unwrap()
 	} else if is_data::<T>() {
 		<dyn Any>::downcast_ref(data).unwrap()
+	} else if is_path_params::<T>() {
+		<dyn Any>::downcast_ref::<T>(params).unwrap()
+	} else if params.exists(name) && is_string::<T>() {
+		<dyn Any>::downcast_ref::<T>(params.get(name).unwrap()).unwrap()
 	} else {
 		data.get::<T>().unwrap()
 	}
@@ -96,8 +123,10 @@ pub fn get_ws_data_as_ref<'a, T: Any>(
 
 #[inline]
 pub fn get_ws_data_as_owned<T: Any>(
-	_data: &Data,
+	_name: &str,
 	ws: &DataManager<WebSocket>,
+	_params: &PathParams,
+	_data: &Data,
 ) -> T {
 	if is_ws::<T>() {
 		unsafe { transform_websocket(ws.take()) }

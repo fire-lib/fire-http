@@ -2,14 +2,20 @@ mod raw_route;
 pub use raw_route::{HyperRequest, RawRoute};
 
 mod route;
-pub use route::{check_static, Route};
+pub use route::{Route, RoutePath};
+
+mod router;
+use router::Router;
 
 mod catcher;
 pub use catcher::Catcher;
 
+mod path_params;
+pub use path_params::{ParamsNames, PathParams};
+
 pub mod util;
 
-use crate::header::RequestHeader;
+use crate::header::Method;
 
 use std::slice;
 
@@ -18,33 +24,38 @@ type BoxedRoute = Box<dyn Route>;
 type BoxedCatcher = Box<dyn Catcher>;
 
 pub struct Routes {
-	// maybe store static routes in hashmap??
-	raw: Vec<BoxedRawRoute>,
-	basic: Vec<BoxedRoute>,
+	raw: Router<BoxedRawRoute>,
+	basic: Router<BoxedRoute>,
 	catcher: Vec<BoxedCatcher>,
 }
 
 impl Routes {
 	pub fn new() -> Self {
 		Self {
-			raw: vec![],
-			basic: vec![],
+			raw: Router::new(),
+			basic: Router::new(),
 			catcher: vec![],
 		}
 	}
 
-	pub fn push_raw<R>(&mut self, route: R)
+	#[track_caller]
+	pub fn push_raw<R>(&mut self, path: RoutePath, route: R)
 	where
 		R: RawRoute + 'static,
 	{
-		self.raw.push(Box::new(route))
+		self.raw
+			.insert(path.method.as_ref(), path.path, Box::new(route))
+			.unwrap();
 	}
 
-	pub fn push<R>(&mut self, route: R)
+	#[track_caller]
+	pub fn push<R>(&mut self, path: RoutePath, route: R)
 	where
 		R: Route + 'static,
 	{
-		self.basic.push(Box::new(route))
+		self.basic
+			.insert(path.method.as_ref(), path.path, Box::new(route))
+			.unwrap();
 	}
 
 	pub fn push_catcher<C>(&mut self, catcher: C)
@@ -54,25 +65,32 @@ impl Routes {
 		self.catcher.push(Box::new(catcher))
 	}
 
-	pub fn route_raw(
-		&self,
-		hyper_request: &HyperRequest,
-	) -> Option<&BoxedRawRoute> {
-		for route in &self.raw {
-			if route.check(hyper_request) {
-				return Some(route);
-			}
-		}
-		None
+	pub fn route_raw<'a>(
+		&'a self,
+		method: &Method,
+		path: &str,
+	) -> Option<(&'a BoxedRawRoute, PathParams)> {
+		let (route, params) = self
+			.raw
+			// first try with the correct method
+			.at(Some(method), path)
+			.or_else(|| self.raw.at(None, path))?;
+
+		Some((route, PathParams::new(params)))
 	}
 
-	pub fn route(&self, request_header: &RequestHeader) -> Option<&BoxedRoute> {
-		for route in &self.basic {
-			if route.check(request_header) {
-				return Some(route);
-			}
-		}
-		None
+	pub fn route<'a>(
+		&'a self,
+		method: &Method,
+		path: &str,
+	) -> Option<(&'a BoxedRoute, PathParams)> {
+		let (route, params) = self
+			.basic
+			// first try with the correct method
+			.at(Some(method), path)
+			.or_else(|| self.basic.at(None, path))?;
+
+		Some((route, PathParams::new(params)))
 	}
 
 	pub fn catchers(&self) -> slice::Iter<'_, BoxedCatcher> {

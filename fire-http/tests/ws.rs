@@ -113,3 +113,59 @@ async fn build_con() {
 	// close the connection properly
 	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 }
+
+#[tokio::test]
+async fn ws_params() {
+	// TODO improve test
+	// to look if we get connection closed properly
+	// handle errors in task
+
+	// // build route
+	#[ws("/{id}")]
+	async fn websocket_route(
+		mut ws: WebSocket,
+		id: &String,
+		_: &SomeData,
+		_: &SomeData,
+	) -> Result<(), Error> {
+		let mut c = 0;
+
+		while let Some(msg) = ws.receive().await? {
+			// read
+			assert_eq!(msg.to_text().unwrap(), format!("Hey {}", c));
+			c += 1;
+			// send them
+			ws.send(format!("Hi {id}")).await?;
+		}
+
+		println!("connection closed");
+
+		Ok(())
+	}
+
+	#[derive(Debug)]
+	struct SomeData;
+
+	// builder server
+	let addr = spawn_server!(|builder| {
+		builder.add_data(SomeData);
+		builder.add_raw_route(websocket_route);
+	});
+
+	// make request
+	ws_client!(addr, "/myId", |ws| {
+		for i in 0..5 {
+			ws.send(format!("Hey {}", i)).await.expect("could not send");
+			let msg = ws
+				.receive()
+				.await
+				.expect("could not receive")
+				.expect("no message received");
+			assert_eq!(msg.to_text().expect("not text"), "Hi myId");
+		}
+		ws.close(CloseCode::Normal, "".into()).await;
+	});
+
+	// close the connection properly
+	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+}

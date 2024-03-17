@@ -3,7 +3,7 @@ mod graphiql;
 
 use crate::error::ClientErrorKind;
 use crate::header::{self, Method, Mime, RequestHeader, StatusCode};
-use crate::routes::Route;
+use crate::routes::{ParamsNames, PathParams, Route, RoutePath};
 use crate::util::PinnedFuture;
 use crate::{Body, Data, Error, Request, Response};
 
@@ -28,16 +28,19 @@ impl GraphiQl {
 }
 
 impl Route for GraphiQl {
-	fn check(&self, header: &RequestHeader) -> bool {
-		header.method() == &Method::GET
-			&& header.uri().path().starts_with(self.uri)
-	}
+	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
 
-	fn validate_data(&self, _data: &Data) {}
+	fn path(&self) -> RoutePath {
+		RoutePath {
+			method: Some(Method::GET),
+			path: format!("{}/{{*rem}}", self.uri.trim_end_matches('/')).into(),
+		}
+	}
 
 	fn call<'a>(
 		&'a self,
 		_req: &'a mut Request,
+		_params: &'a PathParams,
 		_: &'a Data,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		PinnedFuture::new(async move {
@@ -104,16 +107,19 @@ where
 	Sub::TypeInfo: Send + Sync,
 	S: ScalarValue + Send + Sync,
 {
-	fn check(&self, header: &RequestHeader) -> bool {
-		header.method() == &Method::POST
-			&& header.uri().path().starts_with(self.uri)
-	}
+	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
 
-	fn validate_data(&self, _data: &Data) {}
+	fn path(&self) -> RoutePath {
+		RoutePath {
+			method: Some(Method::POST),
+			path: self.uri.into(),
+		}
+	}
 
 	fn call<'a>(
 		&'a self,
 		req: &'a mut Request,
+		_params: &'a PathParams,
 		data: &'a Data,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		PinnedFuture::new(async move {

@@ -17,7 +17,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
-	let input_types = validate_inputs(item.sig.inputs.iter(), false)?;
+	let inputs = validate_inputs(item.sig.inputs.iter(), false)?;
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
@@ -37,7 +37,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 	let valid_data_fn = {
 		let mut asserts = vec![];
 
-		for ty in &input_types {
+		for (name, ty) in &inputs {
 			let valid_fn = match ref_type(&ty) {
 				Some(reff) => {
 					let elem = &reff.elem;
@@ -55,12 +55,16 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 			let error_msg = format!("could not find {}", quote!(#ty));
 
 			asserts.push(quote!(
-				assert!(#valid_fn(data), #error_msg);
+				assert!(#valid_fn(#name, params, data), #error_msg);
 			));
 		}
 
 		quote!(
-			fn validate_data(&self, data: &#fire::Data) {
+			fn validate_data(
+				&self,
+				params: &#fire::routes::ParamsNames,
+				data: &#fire::Data
+			) {
 				#(#asserts)*
 			}
 		)
@@ -85,7 +89,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 		let mut handler_args_vars = vec![];
 		let mut handler_args = vec![];
 
-		for (idx, ty) in input_types.iter().enumerate() {
+		for (idx, (name, ty)) in inputs.iter().enumerate() {
 			let get_fn = match ref_type(&ty) {
 				Some(reff) => {
 					let elem = &reff.elem;
@@ -105,7 +109,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 			let var_name = format_ident!("handler_arg_{idx}");
 
 			handler_args_vars.push(quote!(
-				let #var_name = #get_fn(&data, &req, &streamer);
+				let #var_name = #get_fn(#name, &streamer, &req, params, &data);
 			));
 			handler_args.push(quote!(#var_name));
 		}
@@ -114,6 +118,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 			fn handle<'a>(
 				&'a self,
 				req: #stream_mod::message::MessageData,
+				params: &'a #fire::routes::PathParams,
 				streamer: #stream_mod::streamer::RawStreamer,
 				data: &'a #fire::Data
 			) -> #stream_mod::server::PinnedFuture<'a, std::result::Result<
@@ -125,8 +130,9 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 				type __Error = #ty_as_stream::Error;
 
 				async fn _handle(
-					req: #stream_ty,
 					streamer: #stream_mod::streamer::RawStreamer,
+					req: #stream_ty,
+					params: &#fire::routes::PathParams,
 					data: &#fire::Data
 				) -> std::result::Result<(), __Error> {
 					// transform streamer
@@ -148,7 +154,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 				#stream_mod::server::PinnedFuture::new(async move {
 					let req = #stream_mod::util::deserialize_req(req)?;
 
-					let r = _handle(req, streamer, data).await;
+					let r = _handle(streamer, req, params, data).await;
 					#stream_mod::util::error_to_data::<#stream_ty>(r)
 				})
 			}

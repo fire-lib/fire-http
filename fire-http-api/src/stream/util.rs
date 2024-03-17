@@ -4,6 +4,7 @@ use super::streamer::RawStreamer;
 use super::{Stream, Streamer};
 use crate::util::{transform_owned, DataManager};
 
+use fire::routes::{ParamsNames, PathParams};
 use fire::Data;
 
 use std::any::{Any, TypeId};
@@ -23,9 +24,21 @@ fn is_data<T: Any>() -> bool {
 	TypeId::of::<T>() == TypeId::of::<Data>()
 }
 
+fn is_path_params<T: Any>() -> bool {
+	TypeId::of::<T>() == TypeId::of::<PathParams>()
+}
+
+fn is_string<T: Any>() -> bool {
+	TypeId::of::<T>() == TypeId::of::<String>()
+}
+
 /// fn to check if a type can be accessed in a websocket handler as reference
 #[inline]
-pub fn valid_stream_data_as_ref<T, S>(data: &Data) -> bool
+pub fn valid_stream_data_as_ref<T, S>(
+	name: &str,
+	params: &ParamsNames,
+	data: &Data,
+) -> bool
 where
 	T: Any,
 	S: Stream + 'static,
@@ -33,12 +46,18 @@ where
 	is_req::<T, S>()
 		|| is_streamer::<T, S>()
 		|| is_data::<T>()
+		|| is_path_params::<T>()
+		|| (params.exists(name) && is_string::<T>())
 		|| data.exists::<T>()
 }
 
 /// fn to check if a type can be accessed in a websocket handler as owned
 #[inline]
-pub fn valid_stream_data_as_owned<T, S>(_: &Data) -> bool
+pub fn valid_stream_data_as_owned<T, S>(
+	_name: &str,
+	_params: &ParamsNames,
+	_data: &Data,
+) -> bool
 where
 	T: Any,
 	S: Stream + 'static,
@@ -48,9 +67,11 @@ where
 
 #[inline]
 pub fn get_stream_data_as_ref<'a, T, S>(
-	data: &'a Data,
-	req: &'a DataManager<S>,
+	name: &str,
 	streamer: &'a DataManager<Streamer<S::Message>>,
+	req: &'a DataManager<S>,
+	params: &'a PathParams,
+	data: &'a Data,
 ) -> &'a T
 where
 	T: Any,
@@ -64,16 +85,22 @@ where
 		<dyn Any>::downcast_ref(streamer).unwrap()
 	} else if is_data::<T>() {
 		<dyn Any>::downcast_ref(data).unwrap()
+	} else if is_path_params::<T>() {
+		<dyn Any>::downcast_ref::<T>(params).unwrap()
+	} else if params.exists(name) && is_string::<T>() {
+		<dyn Any>::downcast_ref::<T>(params.get(name).unwrap()).unwrap()
 	} else {
 		data.get::<T>().unwrap()
 	}
 }
 
 #[inline]
-pub fn get_stream_data_as_owned<T, S>(
-	_data: &Data,
-	req: &DataManager<S>,
-	streamer: &DataManager<Streamer<S::Message>>,
+pub fn get_stream_data_as_owned<'a, T, S>(
+	_name: &str,
+	streamer: &'a DataManager<Streamer<S::Message>>,
+	req: &'a DataManager<S>,
+	_params: &'a PathParams,
+	_data: &'a Data,
 ) -> T
 where
 	T: Any,

@@ -64,10 +64,38 @@ async fn test(r: TestReq) -> Result<TestResp, Error> {
 	Ok(TestResp { ho: r.hi })
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserReq;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserResp {
+	id: String,
+	name: String,
+}
+
+impl Request for UserReq {
+	type Response = UserResp;
+	type Error = Error;
+
+	const PATH: &'static str = "/api/user/{id}";
+	const METHOD: Method = Method::POST;
+}
+
+#[api(UserReq)]
+async fn user(id: &String) -> Result<UserResp, Error> {
+	Ok(UserResp {
+		id: id.clone(),
+		name: "John".into(),
+	})
+}
+
 async fn init() -> FirePitApi {
 	let mut server = fire::build("127.0.0.1:0").await.unwrap();
 
 	server.add_route(test);
+	server.add_route(user);
 
 	let fire = server.build().await.unwrap();
 	FirePitApi::new(fire.pit())
@@ -80,4 +108,22 @@ async fn test_test() {
 
 	let resp = pit.request(&TestReq { hi: "hey".into() }).await.unwrap();
 	assert_eq!(resp, TestResp { ho: "hey".into() });
+}
+
+#[traced_test]
+#[tokio::test]
+async fn test_user() {
+	let pit = init().await;
+
+	let resp = pit
+		.request_with_uri("/api/user/123", &UserReq)
+		.await
+		.unwrap();
+	assert_eq!(
+		resp,
+		UserResp {
+			id: "123".into(),
+			name: "John".into()
+		}
+	);
 }

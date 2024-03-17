@@ -1,4 +1,4 @@
-use crate::route::{detect_dyn_uri, generate_struct};
+use crate::route::generate_struct;
 use crate::util::{
 	fire_http_crate, ref_type, validate_inputs, validate_signature,
 };
@@ -14,32 +14,15 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
-	let input_types = validate_inputs(item.sig.inputs.iter(), false)?;
+	let inputs = validate_inputs(item.sig.inputs.iter(), false)?;
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
 
-	let check_fn = {
-		let (dyn_route, uri) = detect_dyn_uri(&args.uri);
-
-		let uri_check = if dyn_route {
-			quote!(req.uri().path().starts_with(#uri))
-		} else {
-			quote!(#fire::routes::check_static(req.uri().path(), #uri))
-		};
-
-		quote!(
-			fn check(&self, req: &#fire::routes::HyperRequest) -> bool {
-				req.method() == &#fire::header::Method::GET &&
-				#uri_check
-			}
-		)
-	};
-
 	let valid_data_fn = {
 		let mut asserts = vec![];
 
-		for ty in &input_types {
+		for (name, ty) in &inputs {
 			let valid_fn = match ref_type(&ty) {
 				Some(reff) => {
 					let elem = &reff.elem;
@@ -53,13 +36,26 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 			let error_msg = format!("could not find {}", quote!(#ty));
 
 			asserts.push(quote!(
-				assert!(#valid_fn(data), #error_msg);
+				assert!(#valid_fn(#name, params, data), #error_msg);
 			));
 		}
 
 		quote!(
-			fn validate_data(&self, data: &#fire::Data) {
+			fn validate_data(&self, params: &#fire::routes::ParamsNames, data: &#fire::Data) {
 				#(#asserts)*
+			}
+		)
+	};
+
+	let path_fn = {
+		let uri = &args.uri;
+
+		quote!(
+			fn path(&self) -> #fire::routes::RoutePath {
+				#fire::routes::RoutePath {
+					method: Some(#fire::header::Method::GET),
+					path: #uri.into()
+				}
 			}
 		)
 	};
@@ -83,7 +79,7 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 		let mut handler_args_vars = vec![];
 		let mut handler_args = vec![];
 
-		for (idx, ty) in input_types.iter().enumerate() {
+		for (idx, (name, ty)) in inputs.iter().enumerate() {
 			let get_fn = match ref_type(&ty) {
 				Some(reff) => {
 					let elem = &reff.elem;
@@ -97,7 +93,7 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 			let var_name = format_ident!("handler_arg_{idx}");
 
 			handler_args_vars.push(quote!(
-				let #var_name = #get_fn(&data, &ws);
+				let #var_name = #get_fn(#name, &ws, &params, &data);
 			));
 			handler_args.push(quote!(#var_name));
 		}
@@ -106,6 +102,7 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 			fn call<'a>(
 				&'a self,
 				req: &'a mut #fire::routes::HyperRequest,
+				params: &'a #fire::routes::PathParams,
 				data: &'a #fire::Data
 			) -> #fire::util::PinnedFuture<'a,
 				Option<#fire::Result<#fire::Response>>
@@ -120,6 +117,7 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 					};
 
 					let data = data.clone();
+					let params = params.clone();
 
 					#fire::ws::util::spawn(async move {
 						match on_upgrade.await {
@@ -151,9 +149,9 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 		#struct_gen
 
 		impl #fire::routes::RawRoute for #struct_name {
-			#check_fn
-
 			#valid_data_fn
+
+			#path_fn
 
 			#call_fn
 		}

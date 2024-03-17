@@ -83,6 +83,7 @@ impl TestResponse {
 		Self { inner }
 	}
 
+	#[track_caller]
 	pub fn assert_status(self, other: u16) -> Self {
 		assert_eq!(
 			self.inner.status().as_u16(),
@@ -92,6 +93,7 @@ impl TestResponse {
 		self
 	}
 
+	#[track_caller]
 	pub fn assert_header(self, key: &str, value: impl AsRef<str>) -> Self {
 		let v = self
 			.inner
@@ -104,6 +106,7 @@ impl TestResponse {
 		self
 	}
 
+	#[track_caller]
 	pub fn assert_not_header(self, key: &str) -> Self {
 		if self.inner.headers().get(key).is_some() {
 			panic!("expected no header named {}", key);

@@ -5,7 +5,7 @@ mod data;
 pub use data::Data;
 
 pub mod routes;
-use routes::{Catcher, RawRoute, Route, Routes};
+use routes::{Catcher, ParamsNames, RawRoute, Route, Routes};
 
 #[macro_use]
 pub mod util;
@@ -105,8 +105,10 @@ impl FireBuilder {
 	where
 		R: RawRoute + 'static,
 	{
-		route.validate_data(&self.data);
-		self.routes.push_raw(route)
+		let path = route.path();
+		let names = ParamsNames::parse(&path.path);
+		route.validate_data(&names, &self.data);
+		self.routes.push_raw(path, route)
 	}
 
 	/// Adds a `Route` to the fire.
@@ -115,8 +117,10 @@ impl FireBuilder {
 		R: IntoRoute + 'static,
 	{
 		let route = route.into_route();
-		route.validate_data(&self.data);
-		self.routes.push(route)
+		let path = route.path();
+		let names = ParamsNames::parse(&path.path);
+		route.validate_data(&names, &self.data);
+		self.routes.push(path, route)
 	}
 
 	/// Adds a `Catcher` to the fire.

@@ -61,6 +61,29 @@ async fn test_post() {
 }
 
 #[tokio::test]
+async fn test_params() {
+	const BODY: &str = "Hello, name!";
+
+	#[get("/{name}")]
+	fn hello(name: &String) -> String {
+		format!("Hello, {}!", name)
+	}
+
+	let addr = spawn_server!(|builder| {
+		builder.add_route(hello);
+	});
+
+	// now do a request
+	make_request!("GET", addr, "/name")
+		.await
+		.assert_status(200)
+		.assert_header("content-type", "text/plain; charset=utf-8")
+		.assert_header("content-length", BODY.len().to_string())
+		.assert_body_str(BODY)
+		.await;
+}
+
+#[tokio::test]
 async fn test_catcher() {
 	const BODY: &str = "Body not Found";
 

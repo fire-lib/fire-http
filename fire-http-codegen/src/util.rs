@@ -1,6 +1,8 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use syn::{punctuated, Error, FnArg, Result, Signature, Type, TypeReference};
+use syn::{
+	punctuated, Error, FnArg, Pat, Result, Signature, Type, TypeReference,
+};
 
 use proc_macro_crate::{crate_name, FoundCrate};
 
@@ -36,19 +38,28 @@ pub(crate) fn ref_type(ty: &Type) -> Option<&TypeReference> {
 	}
 }
 
+fn name_from_pattern(pat: &Pat) -> Option<String> {
+	match pat {
+		Pat::Ident(ident) => Some(ident.ident.to_string()),
+		_ => None,
+	}
+}
+
 #[allow(dead_code)]
 pub(crate) fn validate_inputs(
 	inputs: punctuated::Iter<'_, FnArg>,
 	mut_ref_allowed: bool,
-) -> Result<Vec<Box<Type>>> {
+) -> Result<Vec<(String, Box<Type>)>> {
 	let mut v = vec![];
 
 	for fn_arg in inputs {
-		let ty = match fn_arg {
+		let (name, ty) = match fn_arg {
 			FnArg::Receiver(r) => {
 				return Err(Error::new_spanned(r, "self not allowed"))
 			}
-			FnArg::Typed(t) => t.ty.clone(),
+			FnArg::Typed(t) => {
+				(name_from_pattern(&t.pat).unwrap_or_default(), t.ty.clone())
+			}
 		};
 
 		if let Some(reff) = ref_type(&ty) {
@@ -67,7 +78,7 @@ pub(crate) fn validate_inputs(
 			}
 		}
 
-		v.push(ty);
+		v.push((name, ty));
 	}
 
 	Ok(v)

@@ -1,8 +1,8 @@
 use super::static_files::CachingBuilder;
 use super::{file, partial_file, Caching, Range};
-use crate::header::{Method, RequestHeader};
+use crate::header::Method;
 use crate::into::IntoResponse;
-use crate::routes::check_static;
+use crate::routes::{ParamsNames, PathParams, RoutePath};
 use crate::util::PinnedFuture;
 use crate::{Data, Error, IntoRoute, Request, Response, Route};
 
@@ -123,17 +123,20 @@ pub struct MemoryFileRoute {
 }
 
 impl Route for MemoryFileRoute {
-	fn check(&self, header: &RequestHeader) -> bool {
-		header.method() == &Method::GET
-			&& check_static(header.uri().path(), self.uri)
-	}
+	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
 
-	fn validate_data(&self, _data: &Data) {}
+	fn path(&self) -> RoutePath {
+		RoutePath {
+			method: Some(Method::GET),
+			path: self.uri.into(),
+		}
+	}
 
 	fn call<'a>(
 		&'a self,
 		req: &'a mut Request,
-		_: &'a Data,
+		_params: &'a PathParams,
+		_data: &'a Data,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		let caching = self.caching.clone();
 

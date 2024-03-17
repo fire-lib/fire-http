@@ -15,7 +15,9 @@ use tokio::time::{interval, Duration};
 use tracing::error;
 
 use fire::header::Method;
-use fire::routes::{HyperRequest, RawRoute};
+use fire::routes::{
+	HyperRequest, ParamsNames, PathParams, RawRoute, RoutePath,
+};
 pub use fire::util::PinnedFuture;
 use fire::ws::{self, JsonError, WebSocket};
 use fire::{Data, Response};
@@ -34,7 +36,7 @@ pub trait IntoStreamHandler {
 }
 
 pub trait StreamHandler {
-	fn validate_data(&self, _data: &Data) {}
+	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
 
 	/// every MessageData needs to correspond with the StreamTrait
 	///
@@ -44,6 +46,7 @@ pub trait StreamHandler {
 	fn handle<'a>(
 		&'a self,
 		req: MessageData,
+		params: &'a PathParams,
 		streamer: RawStreamer,
 		data: &'a Data,
 	) -> PinnedFuture<'a, Result<MessageData, UnrecoverableError>>;
@@ -78,14 +81,17 @@ impl StreamServer {
 }
 
 impl RawRoute for StreamServer {
-	fn check(&self, req: &HyperRequest) -> bool {
-		req.method() == Method::GET
-			&& fire::routes::check_static(req.uri().path(), self.uri)
+	fn path(&self) -> RoutePath {
+		RoutePath {
+			method: Some(Method::GET),
+			path: self.uri.into(),
+		}
 	}
 
 	fn call<'a>(
 		&'a self,
 		req: &'a mut HyperRequest,
+		params: &'a PathParams,
 		data: &'a Data,
 	) -> PinnedFuture<'a, Option<fire::Result<Response>>> {
 		PinnedFuture::new(async move {
@@ -96,6 +102,7 @@ impl RawRoute for StreamServer {
 
 			let handlers = self.inner.clone();
 			let data = data.clone();
+			let params = params.clone();
 
 			// we need to spawn a future because
 			// upgrade on can only be fufilled after
@@ -107,7 +114,8 @@ impl RawRoute for StreamServer {
 
 						trace!("connection upgraded");
 
-						let res = handle_connection(handlers, ws, data).await;
+						let res =
+							handle_connection(handlers, ws, params, data).await;
 						if let Err(e) = res {
 							error!("websocket connection failed with {:?}", e);
 						}
@@ -124,6 +132,7 @@ impl RawRoute for StreamServer {
 async fn handle_connection(
 	handlers: Arc<HashMap<Request, Box<dyn StreamHandler + Send + Sync>>>,
 	mut ws: WebSocket,
+	params: PathParams,
 	data: Data,
 ) -> Result<(), UnrecoverableError> {
 	let mut receivers = Receivers::new();
@@ -203,6 +212,7 @@ async fn handle_connection(
 						let handlers = handlers.clone();
 						let msg_data = msg.data;
 						let close_tx = close_tx.clone();
+						let params = params.clone();
 
 						// the first task only catches panics
 						// and the seconds starts the handler
@@ -223,6 +233,7 @@ async fn handle_connection(
 
 								let r = handler.handle(
 									msg_data,
+									&params,
 									streamer,
 									&data
 								).await;

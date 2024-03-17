@@ -4,7 +4,14 @@ use crate::{Method, TransformOutput};
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Error, FnArg, ItemFn, Result, Type};
+use syn::{Error, FnArg, ItemFn, Pat, Result, Type};
+
+fn name_from_pattern(pat: &Pat) -> Option<String> {
+	match pat {
+		Pat::Ident(ident) => Some(ident.ident.to_string()),
+		_ => None,
+	}
+}
 
 pub(crate) fn expand(
 	args: Args,
@@ -21,14 +28,16 @@ pub(crate) fn expand(
 
 	// (is_mut, ty)
 	// TypeReference
-	let mut input_types = vec![];
+	let mut inputs = vec![];
 
 	for fn_arg in item.sig.inputs.iter() {
-		let ty = match fn_arg {
+		let (name, ty) = match fn_arg {
 			FnArg::Receiver(r) => {
 				return Err(Error::new_spanned(r, "self not allowed"))
 			}
-			FnArg::Typed(t) => &t.ty,
+			FnArg::Typed(t) => {
+				(name_from_pattern(&t.pat).unwrap_or_else(String::new), &t.ty)
+			}
 		};
 
 		let reff = match &**ty {
@@ -46,35 +55,16 @@ pub(crate) fn expand(
 			return Err(Error::new_spanned(lifetime, "lifetimes not allowed"));
 		}
 
-		input_types.push(reff);
+		inputs.push((name, reff));
 	}
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
 
-	let check_fn = {
-		let (dyn_route, uri) = detect_dyn_uri(&args.uri);
-
-		let uri_check = if dyn_route {
-			quote!(req.uri().path().starts_with(#uri))
-		} else {
-			quote!(#fire::routes::check_static(req.uri().path(), #uri))
-		};
-
-		let method = format_ident!("{}", method.as_str());
-
-		quote!(
-			fn check(&self, req: &#fire::header::RequestHeader) -> bool {
-				req.method() == &#fire::header::Method::#method &&
-				#uri_check
-			}
-		)
-	};
-
 	let valid_data_fn = {
 		let mut asserts = vec![];
 
-		for ty in &input_types {
+		for (name, ty) in &inputs {
 			let elem = &ty.elem;
 			let valid_fn = if ty.mutability.is_some() {
 				quote!(#fire::routes::util::valid_route_data_as_mut)
@@ -82,16 +72,31 @@ pub(crate) fn expand(
 				quote!(#fire::routes::util::valid_route_data_as_ref)
 			};
 
-			let error_msg = format!("could not find {}", quote!(#elem));
+			let error_msg =
+				format!("could not find {}: {}", name, quote!(#elem));
 
 			asserts.push(quote!(
-				assert!(#valid_fn::<#elem>(data), #error_msg);
+				assert!(#valid_fn::<#elem>(#name, params, data), #error_msg);
 			));
 		}
 
 		quote!(
-			fn validate_data(&self, data: &#fire::Data) {
+			fn validate_data(&self, params: &#fire::routes::ParamsNames, data: &#fire::Data) {
 				#(#asserts)*
+			}
+		)
+	};
+
+	let path_fn = {
+		let uri = &args.uri;
+		let method = format_ident!("{}", method.as_str());
+
+		quote!(
+			fn path(&self) -> #fire::routes::RoutePath {
+				#fire::routes::RoutePath {
+					method: Some(#fire::header::Method::#method),
+					path: #uri.into()
+				}
 			}
 		)
 	};
@@ -118,7 +123,7 @@ pub(crate) fn expand(
 
 		let mut call_route_args = vec![];
 
-		for ty in &input_types {
+		for (name, ty) in &inputs {
 			let elem = &ty.elem;
 			let get_fn = if ty.mutability.is_some() {
 				quote!(#fire::routes::util::get_route_data_as_mut)
@@ -127,7 +132,7 @@ pub(crate) fn expand(
 			};
 
 			call_route_args.push(quote!(
-				#get_fn::<#elem>(data, &mut req)
+				#get_fn::<#elem>(#name, &mut req, params, data)
 			));
 		}
 
@@ -145,6 +150,7 @@ pub(crate) fn expand(
 			fn call<'a>(
 				&'a self,
 				req: &'a mut #fire::Request,
+				params: &'a #fire::routes::PathParams,
 				data: &'a #fire::Data
 			) -> #fire::util::PinnedFuture<'a, #fire::Result<#fire::Response>> {
 				#route_fn
@@ -166,9 +172,9 @@ pub(crate) fn expand(
 		#struct_gen
 
 		impl #fire::routes::Route for #struct_name {
-			#check_fn
-
 			#valid_data_fn
+
+			#path_fn
 
 			#call_fn
 		}
@@ -185,12 +191,4 @@ pub(crate) fn generate_struct(item: &ItemFn) -> TokenStream {
 		#[allow(non_camel_case_types)]
 		#vis struct #struct_name;
 	)
-}
-
-pub(crate) fn detect_dyn_uri(args_uri: &str) -> (bool, String) {
-	let uri = args_uri.strip_suffix('*');
-	let dyn_route = uri.is_some();
-	let uri = uri.unwrap_or_else(|| args_uri).to_string();
-
-	(dyn_route, uri)
 }
