@@ -84,7 +84,7 @@ impl Request {
 
 	#[cfg(feature = "query")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "query")))]
-	pub async fn deserialize_query<D>(&mut self) -> Result<D, DeserializeError>
+	pub fn deserialize_query<D>(&self) -> Result<D, DeserializeError>
 	where
 		D: serde::de::DeserializeOwned + Send + 'static,
 	{
@@ -132,7 +132,7 @@ mod tests {
 	#[tokio::test]
 	async fn deserialize_query() {
 		let uri = "http://localhost:8080/?a=1&b=2";
-		let mut req = Request::builder(uri.parse().unwrap()).build();
+		let req = Request::builder(uri.parse().unwrap()).build();
 
 		#[derive(serde::Deserialize)]
 		struct Query {
@@ -141,7 +141,7 @@ mod tests {
 			c: Option<String>,
 		}
 
-		let query: Query = req.deserialize_query().await.unwrap();
+		let query: Query = req.deserialize_query().unwrap();
 		assert_eq!(query.a, "1");
 		assert_eq!(query.b, "2");
 		assert_eq!(query.c, None);
