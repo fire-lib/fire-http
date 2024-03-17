@@ -39,9 +39,10 @@ pub fn setup_request<R: Request>(
 pub async fn deserialize_req<R: Request + Send + 'static>(
 	req: &mut fire::Request,
 ) -> Result<R, R::Error> {
-	// since a get request does not have a body let's just mark the body as null
+	// since a get request does not have a body let's parse the query parameters
 	if R::METHOD == Method::GET {
-		serde_json::from_value(serde_json::Value::Null)
+		req.deserialize_query()
+			.await
 			.map_err(|e| R::Error::request(format!("malformed request {e}")))
 	} else {
 		req.deserialize()

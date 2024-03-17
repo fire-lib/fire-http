@@ -1,7 +1,7 @@
 [package]
 name = "fire-http-api"
 description = "Make web apis"
-version = "0.4.0-alpha.1"
+version = "0.4.0-alpha.2"
 authors = ["Sören Meier <info@soerenmeier.ch>"]
 repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
@@ -22,13 +22,18 @@ required-features = ["testing"]
 [dependencies]
 serde = "1.0"
 fire = { package = "fire-http", version = "0.5.0-alpha.1", path = "../fire-http", features = [
-    "json",
+	"json",
+] }
+# just to make sure we got the right version
+representation = { package = "fire-http-representation", version = "0.3.1", features = [
+	"query",
+	"json",
 ] }
 serde_json = "1.0"
 tokio = { version = "1.17", features = ["macros"] }
 tracing = "0.1"
 codegen = { package = "fire-http-codegen", version = "0.3.0-alpha.1", path = "../fire-http-codegen", features = [
-    "api",
+	"api",
 ] }
 
 [dev-dependencies]

@@ -39,11 +39,11 @@ proc-macro-crate = "3.1"
 
 [dev-dependencies]
 fire = { package = "fire-http", version = "0.5.0-alpha.1", path = "../fire-http", features = [
-    "ws",
-    "json",
+	"ws",
+	"json",
 ] }
 fire-api = { package = "fire-http-api", version = "0.4.0-alpha.1", path = "../fire-http-api", features = [
-    "stream",
+	"stream",
 ] }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }

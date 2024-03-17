@@ -6,7 +6,7 @@ use crate::error::ApiError;
 use fire::routes::ParamsNames;
 use serde::de::DeserializeOwned;
 
-use fire::header::{HeaderValues, Mime, StatusCode};
+use fire::header::{HeaderValues, Method, Mime, StatusCode};
 use fire::{Body, Data, Error, FirePit, Request, Response};
 
 pub struct FirePitApi {
@@ -75,10 +75,15 @@ impl FirePitApi {
 		let mut raw_req =
 			Request::builder(uri.as_ref().parse().unwrap()).method(R::METHOD);
 		*raw_req.values_mut() = header;
-		let mut req = raw_req
-			.content_type(Mime::JSON)
-			.body(Body::serialize(req).unwrap())
-			.build();
+
+		let mut req = if R::METHOD == &Method::GET {
+			raw_req.serialize_query(req).unwrap().build()
+		} else {
+			raw_req
+				.content_type(Mime::JSON)
+				.body(Body::serialize(req).unwrap())
+				.build()
+		};
 
 		self.request_raw::<R>(&mut req).await
 	}

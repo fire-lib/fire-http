@@ -66,13 +66,16 @@ async fn test(r: TestReq) -> Result<TestResp, Error> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UserReq;
+pub struct UserReq {
+	image_size: Option<u32>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserResp {
 	id: String,
 	name: String,
+	image_size: Option<u32>,
 }
 
 impl Request for UserReq {
@@ -80,14 +83,15 @@ impl Request for UserReq {
 	type Error = Error;
 
 	const PATH: &'static str = "/api/user/{id}";
-	const METHOD: Method = Method::POST;
+	const METHOD: Method = Method::GET;
 }
 
 #[api(UserReq)]
-async fn user(id: &String) -> Result<UserResp, Error> {
+async fn user(req: UserReq, id: &String) -> Result<UserResp, Error> {
 	Ok(UserResp {
 		id: id.clone(),
 		name: "John".into(),
+		image_size: req.image_size,
 	})
 }
 
@@ -116,14 +120,33 @@ async fn test_user() {
 	let pit = init().await;
 
 	let resp = pit
-		.request_with_uri("/api/user/123", &UserReq)
+		.request_with_uri("/api/user/123", &UserReq { image_size: None })
 		.await
 		.unwrap();
 	assert_eq!(
 		resp,
 		UserResp {
 			id: "123".into(),
-			name: "John".into()
+			name: "John".into(),
+			image_size: None
+		}
+	);
+
+	let resp = pit
+		.request_with_uri(
+			"/api/user/123",
+			&UserReq {
+				image_size: Some(42),
+			},
+		)
+		.await
+		.unwrap();
+	assert_eq!(
+		resp,
+		UserResp {
+			id: "123".into(),
+			name: "John".into(),
+			image_size: Some(42)
 		}
 	);
 }

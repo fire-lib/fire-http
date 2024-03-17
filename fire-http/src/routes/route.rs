@@ -12,9 +12,7 @@ pub struct RoutePath {
 	pub path: Cow<'static, str>,
 }
 
-/// A `Route` is sort of a request handler, routes are checked in order they
-/// where added. If a route returns `true` from the `check` method, `call` is
-/// executed.
+/// A `Route` is sort of a request handler
 ///
 /// If possible you should use the provided macros which implement Route for
 /// you.
