@@ -2,6 +2,7 @@ use codegen::get;
 use fire::Request;
 use fire_http_codegen as codegen;
 
+#[allow(dead_code)]
 struct MyType;
 
 /// Really awesome function
