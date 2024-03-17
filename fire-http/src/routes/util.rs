@@ -26,7 +26,6 @@ pub fn valid_route_data_as_ref<T: Any>(
 	params: &ParamsNames,
 	data: &Data,
 ) -> bool {
-	eprintln!("{:?}", params);
 	is_req::<T>()
 		|| is_data::<T>()
 		|| is_path_params::<T>()
