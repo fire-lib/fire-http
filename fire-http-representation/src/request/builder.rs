@@ -77,6 +77,55 @@ impl RequestBuilder {
 		self
 	}
 
+	/// Sets the body from a serialized value
+	#[cfg(feature = "json")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+	pub fn serialize<S: ?Sized>(self, value: &S) -> std::io::Result<Self>
+	where
+		S: serde::Serialize,
+	{
+		Ok(self.body(Body::serialize(value)?))
+	}
+
+	/// Serializes the value to a query string and appends it to the path.
+	///
+	/// ## Note
+	/// This replaces the previous query.
+	#[cfg(feature = "query")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "query")))]
+	pub fn serialize_query<S: ?Sized>(
+		mut self,
+		value: &S,
+	) -> std::io::Result<Self>
+	where
+		S: serde::Serialize,
+	{
+		use std::io;
+
+		let mut parts = self.header.uri.into_parts();
+
+		let query = serde_urlencoded::to_string(&value)
+			.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+		parts.path_and_query = Some(
+			format!(
+				"{}?{}",
+				parts
+					.path_and_query
+					.as_ref()
+					.map(|p| p.path())
+					.unwrap_or("/"),
+				query
+			)
+			.parse()
+			.expect("serde_urlencoded should always return a valid query"),
+		);
+
+		self.header.uri = Uri::from_parts(parts).unwrap();
+
+		Ok(self)
+	}
+
 	/// Builds a `Request`. Adding the `content-length` header
 	/// if the len of the body is known.
 	pub fn build(mut self) -> Request {

@@ -52,6 +52,7 @@ impl Request {
 	/// - If the header `content-type` does not contain `application/json`.
 	/// - If the body does not contain a valid json or some data is missing.
 	#[cfg(feature = "json")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
 	pub async fn deserialize<D>(&mut self) -> Result<D, DeserializeError>
 	where
 		D: serde::de::DeserializeOwned + Send + 'static,
@@ -80,9 +81,21 @@ impl Request {
 			.await
 			.map_err(|e| DeserializeError::Reading(e))
 	}
+
+	#[cfg(feature = "query")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "query")))]
+	pub async fn deserialize_query<D>(&mut self) -> Result<D, DeserializeError>
+	where
+		D: serde::de::DeserializeOwned + Send + 'static,
+	{
+		let query = self.header().uri().query().unwrap_or("");
+
+		serde_urlencoded::from_str(query)
+			.map_err(|e| DeserializeError::UrlEncoded(e))
+	}
 }
 
-#[cfg(feature = "json")]
+#[cfg(any(feature = "json", feature = "query"))]
 mod deserialize_error {
 	use crate::header::Mime;
 
@@ -95,6 +108,7 @@ mod deserialize_error {
 		UnknownContentType(String),
 		WrongMimeType(Mime),
 		Reading(io::Error),
+		UrlEncoded(serde::de::value::Error),
 	}
 
 	impl fmt::Display for DeserializeError {
@@ -108,3 +122,27 @@ mod deserialize_error {
 
 #[cfg(feature = "json")]
 pub use deserialize_error::*;
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[cfg(feature = "query")]
+	#[tokio::test]
+	async fn deserialize_query() {
+		let uri = "http://localhost:8080/?a=1&b=2";
+		let mut req = Request::builder(uri.parse().unwrap()).build();
+
+		#[derive(serde::Deserialize)]
+		struct Query {
+			a: String,
+			b: String,
+			c: Option<String>,
+		}
+
+		let query: Query = req.deserialize_query().await.unwrap();
+		assert_eq!(query.a, "1");
+		assert_eq!(query.b, "2");
+		assert_eq!(query.c, None);
+	}
+}
