@@ -1,4 +1,4 @@
-use crate::response::ResponseHeaders;
+use crate::response::ResponseSettings;
 use crate::ApiError;
 use crate::Request;
 
@@ -12,7 +12,7 @@ use fire::routes::ParamsNames;
 use tracing::error;
 
 use fire::error::ServerErrorKind;
-use fire::header::{HeaderValues, Method, Mime, RequestHeader, StatusCode};
+use fire::header::{HeaderValues, Method, Mime, RequestHeader};
 use fire::routes::PathParams;
 use fire::{Body, Data, Response};
 
@@ -59,10 +59,10 @@ pub fn serialize_resp<R: Request>(
 
 /// todo find a better name
 pub fn transform_body_to_response<R: Request>(
-	res: Result<(ResponseHeaders, Body), R::Error>,
+	res: Result<(ResponseSettings, Body), R::Error>,
 ) -> fire::Result<Response> {
 	let (status, headers, body) = match res {
-		Ok((headers, body)) => (StatusCode::OK, headers.0, body),
+		Ok((settings, body)) => (settings.status, settings.headers, body),
 		Err(e) => {
 			error!("request handle error: {:?}", e);
 
@@ -102,7 +102,7 @@ fn is_header<T: Any>() -> bool {
 }
 
 fn is_resp<T: Any>() -> bool {
-	TypeId::of::<T>() == TypeId::of::<ResponseHeaders>()
+	TypeId::of::<T>() == TypeId::of::<ResponseSettings>()
 }
 
 fn is_data<T: Any>() -> bool {
@@ -212,7 +212,7 @@ pub fn get_route_data_as_ref<'a, T: Any, R: Any>(
 	req: &'a DataManager<R>,
 	header: &'a RequestHeader,
 	params: &'a PathParams,
-	resp: &'a DataManager<ResponseHeaders>,
+	resp: &'a DataManager<ResponseSettings>,
 	data: &'a Data,
 ) -> &'a T {
 	if is_req::<T, R>() {
@@ -240,7 +240,7 @@ pub fn get_route_data_as_mut<'a, T: Any, R: Any>(
 	req: &'a DataManager<R>,
 	_header: &'a RequestHeader,
 	_params: &'a PathParams,
-	resp: &'a DataManager<ResponseHeaders>,
+	resp: &'a DataManager<ResponseSettings>,
 	_data: &'a Data,
 ) -> &'a mut T {
 	if is_req::<T, R>() {
@@ -260,7 +260,7 @@ pub fn get_route_data_as_owned<'a, T: Any, R: Any>(
 	req: &'a DataManager<R>,
 	_header: &'a RequestHeader,
 	_params: &'a PathParams,
-	_resp: &'a DataManager<ResponseHeaders>,
+	_resp: &'a DataManager<ResponseSettings>,
 	_data: &'a Data,
 ) -> T {
 	if is_req::<T, R>() {

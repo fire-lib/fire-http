@@ -1,26 +1,48 @@
-use fire::header::HeaderValues;
-use std::ops::{Deref, DerefMut};
+use fire::header::{
+	values::IntoHeaderName, HeaderValue, HeaderValues, StatusCode,
+};
+
+use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct ResponseHeaders(pub(crate) HeaderValues);
+pub struct ResponseSettings {
+	pub(crate) headers: HeaderValues,
+	pub(crate) status: StatusCode,
+}
 
-impl ResponseHeaders {
+impl ResponseSettings {
 	#[doc(hidden)]
 	pub fn new() -> Self {
-		Self(HeaderValues::new())
+		Self {
+			headers: HeaderValues::new(),
+			status: StatusCode::OK,
+		}
 	}
-}
 
-impl Deref for ResponseHeaders {
-	type Target = HeaderValues;
-
-	fn deref(&self) -> &HeaderValues {
-		&self.0
+	pub fn headers_mut(&mut self) -> &mut HeaderValues {
+		&mut self.headers
 	}
-}
 
-impl DerefMut for ResponseHeaders {
-	fn deref_mut(&mut self) -> &mut HeaderValues {
-		&mut self.0
+	/// Sets a header value.
+	///
+	/// ## Note
+	/// Only ASCII characters are allowed, use
+	/// `self.headers_mut().encode_value()` to allow any character.
+	///
+	/// ## Panics
+	/// If the value is not a valid `HeaderValue`.
+	pub fn header<K, V>(&mut self, key: K, val: V) -> &mut Self
+	where
+		K: IntoHeaderName,
+		V: TryInto<HeaderValue>,
+		V::Error: fmt::Debug,
+	{
+		self.headers.insert(key, val);
+		self
+	}
+
+	pub fn status(&mut self, status: StatusCode) -> &mut Self {
+		self.status = status;
+		self
 	}
 }
