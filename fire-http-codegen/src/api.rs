@@ -139,7 +139,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 					params: &#fire::routes::PathParams,
 					data: &#fire::Data
 				) -> std::result::Result<(
-					#fire_api::response::ResponseHeaders,
+					#fire_api::response::ResponseSettings,
 					#fire::Body
 				), __Error> {
 					#fire_api::util::setup_request::<#req_ty>(fire_req)?;
@@ -151,7 +151,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 					let req = #fire_api::util::DataManager::new(req);
 					let header = fire_req.header();
 					let resp_header = #fire_api::util::DataManager::new(
-						#fire_api::response::ResponseHeaders::new()
+						#fire_api::response::ResponseSettings::new()
 					);
 
 					#(#handler_args_vars)*
