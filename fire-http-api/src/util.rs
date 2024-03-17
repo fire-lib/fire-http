@@ -42,7 +42,6 @@ pub async fn deserialize_req<R: Request + Send + 'static>(
 	// since a get request does not have a body let's parse the query parameters
 	if R::METHOD == Method::GET {
 		req.deserialize_query()
-			.await
 			.map_err(|e| R::Error::request(format!("malformed request {e}")))
 	} else {
 		req.deserialize()
