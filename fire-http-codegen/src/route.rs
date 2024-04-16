@@ -40,22 +40,16 @@ pub(crate) fn expand(
 			}
 		};
 
-		let reff = match &**ty {
-			Type::Reference(r) => r,
-			_ => {
+		if let Type::Reference(reff) = &**ty {
+			if let Some(lifetime) = &reff.lifetime {
 				return Err(Error::new_spanned(
-					ty,
-					"route argument needs to be \
-				a reference",
-				))
+					lifetime,
+					"lifetimes not allowed",
+				));
 			}
-		};
-
-		if let Some(lifetime) = &reff.lifetime {
-			return Err(Error::new_spanned(lifetime, "lifetimes not allowed"));
 		}
 
-		inputs.push((name, reff));
+		inputs.push((name, ty));
 	}
 
 	let struct_name = &item.sig.ident;
@@ -65,23 +59,28 @@ pub(crate) fn expand(
 		let mut asserts = vec![];
 
 		for (name, ty) in &inputs {
-			let elem = &ty.elem;
-			let valid_fn = if ty.mutability.is_some() {
-				quote!(#fire::routes::util::valid_route_data_as_mut)
-			} else {
-				quote!(#fire::routes::util::valid_route_data_as_ref)
-			};
+			// let valid_fn = if ty.mutability.is_some() {
+			// 	quote!(#fire::routes::util::valid_route_data_as_mut)
+			// } else {
+			// 	quote!(#fire::routes::util::valid_route_data_as_ref)
+			// };
 
-			let error_msg =
-				format!("could not find {}: {}", name, quote!(#elem));
+			let error_msg = format!("could not find {}: {}", name, quote!(#ty));
 
 			asserts.push(quote!(
-				assert!(#valid_fn::<#elem>(#name, params, data), #error_msg);
+				<#ty as #fire::extractor::Extractor>::validate_requirements(
+					#name, params, resources
+				);
+				// assert!(#valid_fn::<#elem>(#name, params, data), #error_msg);
 			));
 		}
 
 		quote!(
-			fn validate_data(&self, params: &#fire::routes::ParamsNames, data: &#fire::Data) {
+			fn validate_requirements(
+				&self,
+				params: &#fire::routes::ParamsNames,
+				resources: &#fire::Resources
+			) {
 				#(#asserts)*
 			}
 		)
@@ -122,18 +121,43 @@ pub(crate) fn expand(
 		};
 
 		let mut call_route_args = vec![];
+		let mut prepare_extractors = vec![];
 
 		for (name, ty) in &inputs {
-			let elem = &ty.elem;
-			let get_fn = if ty.mutability.is_some() {
-				quote!(#fire::routes::util::get_route_data_as_mut)
-			} else {
-				quote!(#fire::routes::util::get_route_data_as_ref)
-			};
+			prepare_extractors.push(quote!(
+				let res = <#ty as #fire::extractor::Extractor>::prepare(
+					#name,
+					req,
+					params,
+					&mut state,
+					resources
+				).await;
 
-			call_route_args.push(quote!(
-				#get_fn::<#elem>(#name, &mut req, params, data)
+				if let Err(e) = res {
+					return Err(#fire::Error::new(
+						#fire::extractor::ExtractorError::error_kind(&e),
+						#fire::extractor::ExtractorError::into_std(e)
+					));
+				}
 			));
+
+			call_route_args.push(quote!({
+				let res = <#ty as #fire::extractor::Extractor>::extract(
+					#name,
+					&mut req,
+					params,
+					&state,
+					resources
+				);
+
+				match res {
+					Ok(res) => res,
+					Err(err) => return Err(#fire::Error::new(
+						#fire::extractor::ExtractorError::error_kind(&err),
+						#fire::extractor::ExtractorError::into_std(err)
+					))
+				}
+			}));
 		}
 
 		let process_ret_ty = match output {
@@ -151,11 +175,17 @@ pub(crate) fn expand(
 				&'a self,
 				req: &'a mut #fire::Request,
 				params: &'a #fire::routes::PathParams,
-				data: &'a #fire::Data
+				resources: &'a #fire::Resources
 			) -> #fire::util::PinnedFuture<'a, #fire::Result<#fire::Response>> {
 				#route_fn
 
 				#fire::util::PinnedFuture::new(async move {
+					#[allow(unused_mut, dead_code)]
+					let mut state = #fire::state::State::new();
+
+					// prepare extractions
+					#(#prepare_extractors)*
+
 					let mut req = Some(req);
 
 					let ret = handle_route(

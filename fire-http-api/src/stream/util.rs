@@ -5,7 +5,7 @@ use super::{Stream, Streamer};
 use crate::util::{transform_owned, DataManager};
 
 use fire::routes::{ParamsNames, PathParams};
-use fire::Data;
+use fire::Resources;
 
 use std::any::{Any, TypeId};
 
@@ -21,7 +21,7 @@ where
 }
 
 fn is_data<T: Any>() -> bool {
-	TypeId::of::<T>() == TypeId::of::<Data>()
+	TypeId::of::<T>() == TypeId::of::<Resources>()
 }
 
 fn is_path_params<T: Any>() -> bool {
@@ -37,7 +37,7 @@ fn is_string<T: Any>() -> bool {
 pub fn valid_stream_data_as_ref<T, S>(
 	name: &str,
 	params: &ParamsNames,
-	data: &Data,
+	data: &Resources,
 ) -> bool
 where
 	T: Any,
@@ -56,7 +56,7 @@ where
 pub fn valid_stream_data_as_owned<T, S>(
 	_name: &str,
 	_params: &ParamsNames,
-	_data: &Data,
+	_data: &Resources,
 ) -> bool
 where
 	T: Any,
@@ -71,7 +71,7 @@ pub fn get_stream_data_as_ref<'a, T, S>(
 	streamer: &'a DataManager<Streamer<S::Message>>,
 	req: &'a DataManager<S>,
 	params: &'a PathParams,
-	data: &'a Data,
+	data: &'a Resources,
 ) -> &'a T
 where
 	T: Any,
@@ -100,7 +100,7 @@ pub fn get_stream_data_as_owned<'a, T, S>(
 	streamer: &'a DataManager<Streamer<S::Message>>,
 	req: &'a DataManager<S>,
 	_params: &'a PathParams,
-	_data: &'a Data,
+	_data: &'a Resources,
 ) -> T
 where
 	T: Any,

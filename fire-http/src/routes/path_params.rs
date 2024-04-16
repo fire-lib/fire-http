@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+	collections::{HashMap, HashSet},
+	str::FromStr,
+};
 
 use byte_parser::{ParseIterator, StrParser};
 use matchit::Params;
@@ -21,6 +24,13 @@ impl PathParams {
 
 	pub fn exists(&self, key: impl AsRef<str>) -> bool {
 		self.inner.get(key.as_ref()).is_some()
+	}
+
+	pub fn parse<T>(&self, key: impl AsRef<str>) -> Result<T, T::Err>
+	where
+		T: FromStr,
+	{
+		self.inner.get(key.as_ref()).unwrap().parse()
 	}
 
 	pub fn get(&self, key: impl AsRef<str>) -> Option<&String> {

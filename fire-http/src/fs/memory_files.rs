@@ -4,7 +4,7 @@ use crate::header::Method;
 use crate::into::IntoResponse;
 use crate::routes::{ParamsNames, PathParams, RoutePath};
 use crate::util::PinnedFuture;
-use crate::{Data, Error, IntoRoute, Request, Response, Route};
+use crate::{Error, IntoRoute, Request, Resources, Response, Route};
 
 use std::io;
 use std::time::Duration;
@@ -123,7 +123,7 @@ pub struct MemoryFileRoute {
 }
 
 impl Route for MemoryFileRoute {
-	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
+	fn validate_requirements(&self, _params: &ParamsNames, _data: &Resources) {}
 
 	fn path(&self) -> RoutePath {
 		RoutePath {
@@ -136,7 +136,7 @@ impl Route for MemoryFileRoute {
 		&'a self,
 		req: &'a mut Request,
 		_params: &'a PathParams,
-		_data: &'a Data,
+		_data: &'a Resources,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		let caching = self.caching.clone();
 

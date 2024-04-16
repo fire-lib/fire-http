@@ -6,7 +6,7 @@ use crate::header::{
 };
 use crate::routes::{ParamsNames, PathParams};
 use crate::server::HyperRequest;
-use crate::{Data, Response, Result};
+use crate::{Resources, Response, Result};
 
 use std::any::{Any, TypeId};
 use std::cell::RefCell;
@@ -28,7 +28,7 @@ fn is_ws<T: Any>() -> bool {
 }
 
 fn is_data<T: Any>() -> bool {
-	TypeId::of::<T>() == TypeId::of::<Data>()
+	TypeId::of::<T>() == TypeId::of::<Resources>()
 }
 
 fn is_path_params<T: Any>() -> bool {
@@ -44,7 +44,7 @@ fn is_string<T: Any>() -> bool {
 pub fn valid_ws_data_as_ref<T: Any>(
 	name: &str,
 	params: &ParamsNames,
-	data: &Data,
+	data: &Resources,
 ) -> bool {
 	is_ws::<T>()
 		|| is_data::<T>()
@@ -58,7 +58,7 @@ pub fn valid_ws_data_as_ref<T: Any>(
 pub fn valid_ws_data_as_owned<T: Any>(
 	_name: &str,
 	_params: &ParamsNames,
-	_data: &Data,
+	_data: &Resources,
 ) -> bool {
 	is_ws::<T>()
 }
@@ -105,7 +105,7 @@ pub fn get_ws_data_as_ref<'a, T: Any>(
 	name: &str,
 	ws: &'a DataManager<WebSocket>,
 	params: &'a PathParams,
-	data: &'a Data,
+	data: &'a Resources,
 ) -> &'a T {
 	if is_ws::<T>() {
 		let ws = ws.as_ref();
@@ -126,7 +126,7 @@ pub fn get_ws_data_as_owned<T: Any>(
 	_name: &str,
 	ws: &DataManager<WebSocket>,
 	_params: &PathParams,
-	_data: &Data,
+	_data: &Resources,
 ) -> T {
 	if is_ws::<T>() {
 		unsafe { transform_websocket(ws.take()) }

@@ -41,7 +41,7 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 		}
 
 		quote!(
-			fn validate_data(&self, params: &#fire::routes::ParamsNames, data: &#fire::Data) {
+			fn validate_data(&self, params: &#fire::routes::ParamsNames, data: &#fire::Resources) {
 				#(#asserts)*
 			}
 		)
@@ -103,7 +103,7 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 				&'a self,
 				req: &'a mut #fire::routes::HyperRequest,
 				params: &'a #fire::routes::PathParams,
-				data: &'a #fire::Data
+				data: &'a #fire::Resources
 			) -> #fire::util::PinnedFuture<'a,
 				Option<#fire::Result<#fire::Response>>
 			> {

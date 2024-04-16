@@ -1,7 +1,7 @@
 use crate::header::StatusCode;
 
-use error::Error as ErrorTrait;
-use std::{error, fmt, io};
+use std::error::Error as StdError;
+use std::{fmt, io};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -11,7 +11,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub struct Error {
 	kind: ErrorKind,
-	source: Option<Box<dyn ErrorTrait + Send + Sync>>,
+	source: Option<Box<dyn StdError + Send + Sync>>,
 }
 
 impl Error {
@@ -19,7 +19,7 @@ impl Error {
 	pub fn new<K, E>(kind: K, error: E) -> Self
 	where
 		K: Into<ErrorKind>,
-		E: Into<Box<dyn ErrorTrait + Send + Sync>>,
+		E: Into<Box<dyn StdError + Send + Sync>>,
 	{
 		Self {
 			kind: kind.into(),
@@ -55,7 +55,7 @@ impl Error {
 	/// Returns a new error originating from the server.
 	pub fn from_server_error<E>(error: E) -> Self
 	where
-		E: Into<Box<dyn ErrorTrait + Send + Sync>>,
+		E: Into<Box<dyn StdError + Send + Sync>>,
 	{
 		Self::new(ServerErrorKind::InternalServerError, error)
 	}
@@ -89,8 +89,8 @@ impl fmt::Display for Error {
 	}
 }
 
-impl error::Error for Error {
-	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+impl StdError for Error {
+	fn source(&self) -> Option<&(dyn StdError + 'static)> {
 		self.source.as_ref().map(|e| e.source()).flatten()
 	}
 }

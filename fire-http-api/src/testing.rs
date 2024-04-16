@@ -7,7 +7,7 @@ use fire::routes::ParamsNames;
 use serde::de::DeserializeOwned;
 
 use fire::header::{HeaderValues, Method, Mime, StatusCode};
-use fire::{Body, Data, Error, FirePit, Request, Response};
+use fire::{Body, Error, FirePit, Request, Resources, Response};
 
 pub struct FirePitApi {
 	inner: FirePit,
@@ -18,7 +18,7 @@ impl FirePitApi {
 		Self { inner }
 	}
 
-	pub fn data(&self) -> &Data {
+	pub fn data(&self) -> &Resources {
 		self.inner.data()
 	}
 

@@ -20,7 +20,7 @@ use fire::routes::{
 };
 pub use fire::util::PinnedFuture;
 use fire::ws::{self, JsonError, WebSocket};
-use fire::{Data, Response};
+use fire::{Resources, Response};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Request {
@@ -36,7 +36,7 @@ pub trait IntoStreamHandler {
 }
 
 pub trait StreamHandler {
-	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
+	fn validate_data(&self, _params: &ParamsNames, _data: &Resources) {}
 
 	/// every MessageData needs to correspond with the StreamTrait
 	///
@@ -48,7 +48,7 @@ pub trait StreamHandler {
 		req: MessageData,
 		params: &'a PathParams,
 		streamer: RawStreamer,
-		data: &'a Data,
+		data: &'a Resources,
 	) -> PinnedFuture<'a, Result<MessageData, UnrecoverableError>>;
 }
 
@@ -92,7 +92,7 @@ impl RawRoute for StreamServer {
 		&'a self,
 		req: &'a mut HyperRequest,
 		params: &'a PathParams,
-		data: &'a Data,
+		data: &'a Resources,
 	) -> PinnedFuture<'a, Option<fire::Result<Response>>> {
 		PinnedFuture::new(async move {
 			let (on_upgrade, ws_accept) = match ws::util::upgrade(req) {
@@ -133,7 +133,7 @@ async fn handle_connection(
 	handlers: Arc<HashMap<Request, Box<dyn StreamHandler + Send + Sync>>>,
 	mut ws: WebSocket,
 	params: PathParams,
-	data: Data,
+	data: Resources,
 ) -> Result<(), UnrecoverableError> {
 	let mut receivers = Receivers::new();
 	let mut senders = Senders::new();

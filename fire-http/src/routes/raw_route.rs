@@ -1,5 +1,5 @@
 use crate::util::PinnedFuture;
-use crate::{Data, Response};
+use crate::{Resources, Response};
 
 pub use crate::server::HyperRequest;
 
@@ -11,7 +11,7 @@ use super::{ParamsNames, PathParams, RoutePath};
 /// like websockets and need access to the underlying hyper types.
 pub trait RawRoute: Send + Sync {
 	// check if every data you expect is in Data
-	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
+	fn validate_data(&self, _params: &ParamsNames, _data: &Resources) {}
 
 	// get's only called once
 	fn path(&self) -> RoutePath;
@@ -20,6 +20,6 @@ pub trait RawRoute: Send + Sync {
 		&'a self,
 		req: &'a mut HyperRequest,
 		params: &'a PathParams,
-		data: &'a Data,
+		resources: &'a Resources,
 	) -> PinnedFuture<'a, Option<crate::Result<Response>>>;
 }

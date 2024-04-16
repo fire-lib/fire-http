@@ -1,8 +1,10 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 
-mod data;
-pub use data::Data;
+mod resources;
+pub use resources::Resources;
+
+pub mod state;
 
 pub mod routes;
 use routes::{Catcher, ParamsNames, RawRoute, Route, Routes};
@@ -15,6 +17,8 @@ use into::IntoRoute;
 
 pub mod error;
 pub use error::{Error, Result};
+
+pub mod extractor;
 
 mod server;
 use server::Server;
@@ -63,7 +67,7 @@ pub async fn build(addr: impl ToSocketAddrs) -> Result<FireBuilder> {
 /// `FireBuilder` gathers all materials needed to light a fire (start a server).
 pub struct FireBuilder {
 	addr: SocketAddr,
-	data: Data,
+	data: Resources,
 	routes: Routes,
 	configs: RequestConfigs,
 	show_startup_msg: bool,
@@ -81,7 +85,7 @@ impl FireBuilder {
 			.unwrap();
 		Ok(Self {
 			addr,
-			data: Data::new(),
+			data: Resources::new(),
 			routes: Routes::new(),
 			configs: RequestConfigs::new(),
 			show_startup_msg: true,
@@ -89,7 +93,7 @@ impl FireBuilder {
 	}
 
 	/// Returns a reference to the current data.
-	pub fn data(&self) -> &Data {
+	pub fn data(&self) -> &Resources {
 		&self.data
 	}
 
@@ -119,7 +123,7 @@ impl FireBuilder {
 		let route = route.into_route();
 		let path = route.path();
 		let names = ParamsNames::parse(&path.path);
-		route.validate_data(&names, &self.data);
+		route.validate_requirements(&names, &self.data);
 		self.routes.push(path, route)
 	}
 
@@ -233,7 +237,7 @@ pub struct FirePit {
 }
 
 impl FirePit {
-	pub fn data(&self) -> &Data {
+	pub fn data(&self) -> &Resources {
 		self.wood.data()
 	}
 
@@ -243,7 +247,6 @@ impl FirePit {
 	///
 	/// Returns None if no route was found matching the request.
 	pub async fn route(&self, req: &mut Request) -> Option<Result<Response>> {
-		eprintln!("fire pit route {req:?}");
 		fire::route(&self.wood, req).await
 	}
 }

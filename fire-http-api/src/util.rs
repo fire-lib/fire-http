@@ -14,7 +14,7 @@ use tracing::error;
 use fire::error::ServerErrorKind;
 use fire::header::{HeaderValues, Method, Mime, RequestHeader};
 use fire::routes::PathParams;
-use fire::{Body, Data, Response};
+use fire::{Body, Resources, Response};
 
 pub fn setup_request<R: Request>(
 	req: &mut fire::Request,
@@ -106,7 +106,7 @@ fn is_resp<T: Any>() -> bool {
 }
 
 fn is_data<T: Any>() -> bool {
-	TypeId::of::<T>() == TypeId::of::<Data>()
+	TypeId::of::<T>() == TypeId::of::<Resources>()
 }
 
 fn is_path_params<T: Any>() -> bool {
@@ -122,7 +122,7 @@ fn is_string<T: Any>() -> bool {
 pub fn valid_route_data_as_ref<T: Any, R: Any>(
 	name: &str,
 	params: &ParamsNames,
-	data: &Data,
+	data: &Resources,
 ) -> bool {
 	is_req::<T, R>()
 		|| is_header::<T>()
@@ -138,7 +138,7 @@ pub fn valid_route_data_as_ref<T: Any, R: Any>(
 pub fn valid_route_data_as_mut<T: Any, R: Any>(
 	_name: &str,
 	_params: &ParamsNames,
-	_data: &Data,
+	_data: &Resources,
 ) -> bool {
 	is_req::<T, R>() || is_resp::<T>()
 }
@@ -148,7 +148,7 @@ pub fn valid_route_data_as_mut<T: Any, R: Any>(
 pub fn valid_route_data_as_owned<T: Any, R: Any>(
 	_name: &str,
 	_params: &ParamsNames,
-	_data: &Data,
+	_data: &Resources,
 ) -> bool {
 	is_req::<T, R>()
 }
@@ -213,7 +213,7 @@ pub fn get_route_data_as_ref<'a, T: Any, R: Any>(
 	header: &'a RequestHeader,
 	params: &'a PathParams,
 	resp: &'a DataManager<ResponseSettings>,
-	data: &'a Data,
+	data: &'a Resources,
 ) -> &'a T {
 	if is_req::<T, R>() {
 		let req = req.as_ref();
@@ -241,7 +241,7 @@ pub fn get_route_data_as_mut<'a, T: Any, R: Any>(
 	_header: &'a RequestHeader,
 	_params: &'a PathParams,
 	resp: &'a DataManager<ResponseSettings>,
-	_data: &'a Data,
+	_data: &'a Resources,
 ) -> &'a mut T {
 	if is_req::<T, R>() {
 		let req = req.as_mut();
@@ -261,7 +261,7 @@ pub fn get_route_data_as_owned<'a, T: Any, R: Any>(
 	_header: &'a RequestHeader,
 	_params: &'a PathParams,
 	_resp: &'a DataManager<ResponseSettings>,
-	_data: &'a Data,
+	_data: &'a Resources,
 ) -> T {
 	if is_req::<T, R>() {
 		let req = req.take();

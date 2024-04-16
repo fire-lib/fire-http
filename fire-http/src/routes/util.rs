@@ -1,5 +1,5 @@
 use super::{path_params::ParamsNames, PathParams};
-use crate::{Data, Request};
+use crate::{Request, Resources};
 
 use std::any::{Any, TypeId};
 
@@ -8,7 +8,7 @@ fn is_req<T: Any>() -> bool {
 }
 
 fn is_data<T: Any>() -> bool {
-	TypeId::of::<T>() == TypeId::of::<Data>()
+	TypeId::of::<T>() == TypeId::of::<Resources>()
 }
 
 fn is_path_params<T: Any>() -> bool {
@@ -24,7 +24,7 @@ fn is_string<T: Any>() -> bool {
 pub fn valid_route_data_as_ref<T: Any>(
 	name: &str,
 	params: &ParamsNames,
-	data: &Data,
+	data: &Resources,
 ) -> bool {
 	is_req::<T>()
 		|| is_data::<T>()
@@ -38,7 +38,7 @@ pub fn valid_route_data_as_ref<T: Any>(
 pub fn valid_route_data_as_mut<T: Any>(
 	_name: &str,
 	_params: &ParamsNames,
-	_data: &Data,
+	_data: &Resources,
 ) -> bool {
 	is_req::<T>()
 }
@@ -48,7 +48,7 @@ pub fn get_route_data_as_ref<'a, T: Any>(
 	name: &str,
 	req: &mut Option<&'a mut Request>,
 	params: &'a PathParams,
-	data: &'a Data,
+	data: &'a Resources,
 ) -> &'a T {
 	if is_req::<T>() {
 		let req = req.take().unwrap();
@@ -69,7 +69,7 @@ pub fn get_route_data_as_mut<'a, T: Any>(
 	_name: &str,
 	req: &mut Option<&'a mut Request>,
 	_params: &'a PathParams,
-	_data: &'a Data,
+	_data: &'a Resources,
 ) -> &'a mut T {
 	assert!(is_req::<T>());
 
