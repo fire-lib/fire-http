@@ -79,7 +79,7 @@ pub(crate) fn expand(
 			fn validate_requirements(
 				&self,
 				params: &#fire::routes::ParamsNames,
-				resources: &#fire::Resources
+				resources: &#fire::resources::Resources
 			) {
 				#(#asserts)*
 			}
@@ -175,7 +175,7 @@ pub(crate) fn expand(
 				&'a self,
 				req: &'a mut #fire::Request,
 				params: &'a #fire::routes::PathParams,
-				resources: &'a #fire::Resources
+				resources: &'a #fire::resources::Resources
 			) -> #fire::util::PinnedFuture<'a, #fire::Result<#fire::Response>> {
 				#route_fn
 

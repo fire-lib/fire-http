@@ -1,9 +1,10 @@
 use fire_http as fire;
 
 use fire::header::{RequestHeader, ResponseHeader, StatusCode};
+use fire::resources::Resources;
 use fire::routes::Catcher;
 use fire::util::PinnedFuture;
-use fire::{get, Request, Resources, Response, Result};
+use fire::{get, Request, Response, Result};
 
 #[get("/")]
 fn hello_world() -> &'static str {

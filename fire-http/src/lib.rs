@@ -1,8 +1,8 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 
-mod resources;
-pub use resources::Resources;
+pub mod resources;
+use resources::Resources;
 
 pub mod state;
 
@@ -19,6 +19,7 @@ pub mod error;
 pub use error::{Error, Result};
 
 pub mod extractor;
+pub use extractor::Res;
 
 mod server;
 use server::Server;

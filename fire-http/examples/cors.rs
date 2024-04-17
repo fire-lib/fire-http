@@ -5,9 +5,10 @@ use fire::header::{
 	ACCESS_CONTROL_ALLOW_ORIGIN, X_XSS_PROTECTION,
 };
 use fire::header::{RequestHeader, ResponseHeader, StatusCode};
+use fire::resources::Resources;
 use fire::routes::Catcher;
 use fire::util::PinnedFuture;
-use fire::{get, Request, Resources, Response};
+use fire::{get, Request, Response};
 
 #[get("/")]
 fn hello_world() -> &'static str {

@@ -1,6 +1,7 @@
 use core::fmt;
 use std::convert::Infallible;
 use std::error::Error as StdError;
+use std::pin::Pin;
 use std::str::FromStr;
 use std::{future::Future, ops::Deref};
 
@@ -26,8 +27,8 @@ pub trait Extractor<'a> {
 		_params: &PathParams,
 		_state: &mut State,
 		_resources: &Resources,
-	) -> impl Future<Output = Result<(), Self::Error>> {
-		async { Ok(()) }
+	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>> {
+		Box::pin(async { Ok(()) })
 	}
 
 	fn extract(

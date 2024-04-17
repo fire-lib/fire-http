@@ -1,10 +1,13 @@
+use std::pin;
+
+use fire::resources::Resources;
 use fire_http as fire;
 
 use fire::extractor::{PathParam, Res};
 use fire::header::{Mime, RequestHeader, ResponseHeader, StatusCode};
 use fire::routes::Catcher;
 use fire::util::PinnedFuture;
-use fire::{get, post, Body, Request, Resources, Response};
+use fire::{get, post, Body, Request, Response};
 
 #[macro_use]
 mod util;
