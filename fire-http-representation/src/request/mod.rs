@@ -79,7 +79,7 @@ impl Request {
 			.take()
 			.deserialize()
 			.await
-			.map_err(|e| DeserializeError::Reading(e))
+			.map_err(|e| DeserializeError::Json(e))
 	}
 
 	#[cfg(feature = "query")]
@@ -96,10 +96,10 @@ impl Request {
 }
 
 #[cfg(any(feature = "json", feature = "query"))]
-mod deserialize_error {
+mod serde_error {
 	use crate::header::Mime;
 
-	use std::{fmt, io};
+	use std::fmt;
 
 	#[derive(Debug)]
 	#[non_exhaustive]
@@ -107,21 +107,38 @@ mod deserialize_error {
 		NoContentType,
 		UnknownContentType(String),
 		WrongMimeType(Mime),
-		Reading(io::Error),
+		#[cfg(feature = "json")]
+		Json(serde_json::Error),
 		UrlEncoded(serde::de::value::Error),
 	}
 
 	impl fmt::Display for DeserializeError {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-			write!(f, "Failed to deserialize requets with error {:?}", self)
+			write!(f, "Failed to deserialize request {:?}", self)
 		}
 	}
 
 	impl std::error::Error for DeserializeError {}
+
+	#[derive(Debug)]
+	#[non_exhaustive]
+	pub enum SerializeError {
+		#[cfg(feature = "json")]
+		Json(serde_json::Error),
+		UrlEncoded(serde_urlencoded::ser::Error),
+	}
+
+	impl fmt::Display for SerializeError {
+		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+			write!(f, "Failed to serialize request {:?}", self)
+		}
+	}
+
+	impl std::error::Error for SerializeError {}
 }
 
 #[cfg(feature = "json")]
-pub use deserialize_error::*;
+pub use serde_error::*;
 
 #[cfg(test)]
 mod tests {

@@ -139,13 +139,11 @@ impl Body {
 	/// Creates a new Body from a serializeable object.
 	#[cfg(feature = "json")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-	pub fn serialize<S: ?Sized>(value: &S) -> io::Result<Self>
+	pub fn serialize<S: ?Sized>(value: &S) -> Result<Self, serde_json::Error>
 	where
 		S: serde::Serialize,
 	{
-		serde_json::to_vec(value)
-			.map(|v| v.into())
-			.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+		serde_json::to_vec(value).map(|v| v.into())
 	}
 
 	/// Returns true if we know the body is empty, the body still might be empty
@@ -244,7 +242,7 @@ impl Body {
 	/// Converts the Body into a deserializeable type.
 	#[cfg(feature = "json")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-	pub async fn deserialize<D>(self) -> io::Result<D>
+	pub async fn deserialize<D>(self) -> Result<D, serde_json::Error>
 	where
 		D: serde::de::DeserializeOwned + Send + 'static,
 	{
@@ -252,11 +250,9 @@ impl Body {
 		if reader.needs_spawn_blocking() {
 			task::spawn_blocking(|| serde_json::from_reader(reader))
 				.await
-				.map_err(join_error)?
-				.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+				.expect("deserializing panicked")
 		} else {
 			serde_json::from_reader(reader)
-				.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 		}
 	}
 }
