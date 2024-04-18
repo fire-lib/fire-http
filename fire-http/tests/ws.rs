@@ -8,6 +8,7 @@ use tokio_tungstenite::tungstenite::protocol::Role;
 use tokio_tungstenite::WebSocketStream;
 
 use hyper_util::rt::TokioIo;
+use tracing_test::traced_test;
 
 #[macro_use]
 mod util;
@@ -118,6 +119,7 @@ async fn build_con() {
 }
 
 #[tokio::test]
+#[traced_test]
 async fn ws_params() {
 	// TODO improve test
 	// to look if we get connection closed properly
@@ -158,7 +160,7 @@ async fn ws_params() {
 	});
 
 	// make request
-	ws_client!(addr, "/myId", |ws| {
+	ws_client!(addr, "/42", |ws| {
 		for i in 0..5 {
 			ws.send(format!("Hey {}", i)).await.expect("could not send");
 			let msg = ws
@@ -166,7 +168,7 @@ async fn ws_params() {
 				.await
 				.expect("could not receive")
 				.expect("no message received");
-			assert_eq!(msg.to_text().expect("not text"), "Hi myId");
+			assert_eq!(msg.to_text().expect("not text"), "Hi 42");
 		}
 		ws.close(CloseCode::Normal, "".into()).await;
 	});
