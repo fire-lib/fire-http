@@ -13,8 +13,6 @@ pub use catcher::Catcher;
 mod path_params;
 pub use path_params::{ParamsNames, PathParams};
 
-pub mod util;
-
 use crate::header::Method;
 
 use std::slice;

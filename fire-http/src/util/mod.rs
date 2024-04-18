@@ -13,6 +13,7 @@ use tracing::error;
 
 mod header;
 use header::convert_hyper_parts_to_fire_header;
+pub use header::convert_hyper_req_to_fire_header;
 pub(crate) use header::HeaderError;
 
 use types::body::BodyHttp;

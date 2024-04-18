@@ -104,7 +104,9 @@ pub(crate) async fn route_hyper_req(
 		.routes()
 		.route_raw(hyper_req.method(), hyper_req.uri().path())
 	{
-		let res = route.call(&mut hyper_req, &params, wood.data()).await;
+		let res = route
+			.call(&mut hyper_req, address, &params, wood.data())
+			.await;
 		match res {
 			Some(Ok(res)) => Some(res),
 			Some(Err(e)) => {

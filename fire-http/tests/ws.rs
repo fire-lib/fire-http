@@ -1,6 +1,7 @@
-use fire::ws;
+use fire::extractor::PathParam;
 use fire::ws::{CloseCode, Error, WebSocket};
 use fire::Body;
+use fire::{impl_res_extractor, ws};
 use fire_http as fire;
 
 use tokio_tungstenite::tungstenite::protocol::Role;
@@ -90,6 +91,8 @@ async fn build_con() {
 	#[derive(Debug)]
 	struct SomeData;
 
+	impl_res_extractor!(SomeData);
+
 	// builder server
 	let addr = spawn_server!(|builder| {
 		builder.add_data(SomeData);
@@ -124,7 +127,7 @@ async fn ws_params() {
 	#[ws("/{id}")]
 	async fn websocket_route(
 		mut ws: WebSocket,
-		id: &String,
+		id: PathParam<usize>,
 		_: &SomeData,
 		_: &SomeData,
 	) -> Result<(), Error> {
@@ -145,6 +148,8 @@ async fn ws_params() {
 
 	#[derive(Debug)]
 	struct SomeData;
+
+	impl_res_extractor!(SomeData);
 
 	// builder server
 	let addr = spawn_server!(|builder| {

@@ -48,7 +48,6 @@ fn name_from_pattern(pat: &Pat) -> Option<String> {
 #[allow(dead_code)]
 pub(crate) fn validate_inputs(
 	inputs: punctuated::Iter<'_, FnArg>,
-	mut_ref_allowed: bool,
 ) -> Result<Vec<(String, Box<Type>)>> {
 	let mut v = vec![];
 
@@ -63,12 +62,6 @@ pub(crate) fn validate_inputs(
 		};
 
 		if let Some(reff) = ref_type(&ty) {
-			if !mut_ref_allowed {
-				if let Some(mu) = reff.mutability {
-					return Err(Error::new_spanned(mu, "&mut not supported"));
-				}
-			}
-
 			if let Some(lifetime) = &reff.lifetime {
 				return Err(Error::new_spanned(
 					lifetime,

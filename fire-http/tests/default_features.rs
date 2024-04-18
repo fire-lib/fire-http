@@ -1,9 +1,7 @@
-use std::pin;
-
 use fire::resources::Resources;
 use fire_http as fire;
 
-use fire::extractor::{PathParam, Res};
+use fire::extractor::{PathStr, Res};
 use fire::header::{Mime, RequestHeader, ResponseHeader, StatusCode};
 use fire::routes::Catcher;
 use fire::util::PinnedFuture;
@@ -69,8 +67,8 @@ async fn test_params() {
 	const BODY: &str = "Hello, name!";
 
 	#[get("/{name}")]
-	fn hello(name: PathParam<String>) -> String {
-		format!("Hello, {}!", *name)
+	async fn hello(name: &PathStr) -> String {
+		format!("Hello, {}!", name)
 	}
 
 	let addr = spawn_server!(|builder| {

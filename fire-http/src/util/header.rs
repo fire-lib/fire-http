@@ -28,6 +28,21 @@ pub fn convert_hyper_parts_to_fire_header(
 	})
 }
 
+pub fn convert_hyper_req_to_fire_header<B>(
+	req: &hyper::Request<B>,
+	address: SocketAddr,
+) -> Result<RequestHeader> {
+	let values = HeaderValues::from_inner(req.headers().clone());
+	let uri = fill_uri(req.uri().clone(), &values)?;
+
+	Ok(RequestHeader {
+		address,
+		method: req.method().clone(),
+		uri,
+		values,
+	})
+}
+
 fn fill_uri(uri: Uri, headers: &HeaderValues) -> Result<Uri> {
 	let mut parts = uri.into_parts();
 	// Try to detect it

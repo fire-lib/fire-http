@@ -33,8 +33,8 @@ impl PathParams {
 		self.inner.get(key.as_ref()).unwrap().parse()
 	}
 
-	pub fn get(&self, key: impl AsRef<str>) -> Option<&String> {
-		self.inner.get(key.as_ref())
+	pub fn get(&self, key: impl AsRef<str>) -> Option<&str> {
+		self.inner.get(key.as_ref()).map(|s| s.as_str())
 	}
 }
 
@@ -47,7 +47,7 @@ impl PathParams {
 
 #[derive(Debug, Clone)]
 pub struct ParamsNames<'a> {
-	pub list: HashSet<&'a str>,
+	list: HashSet<&'a str>,
 }
 
 impl<'a> ParamsNames<'a> {

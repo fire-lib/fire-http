@@ -1,6 +1,6 @@
 use std::{
 	any::{Any, TypeId},
-	collections::HashMap,
+	collections::{HashMap, HashSet},
 };
 
 pub struct State {
@@ -31,22 +31,28 @@ impl State {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
+pub struct StateValidation {
+	inner: HashSet<TypeId>,
+}
 
-	// test if we can store a reference
-	struct WithRef<'a> {
-		inner: &'a str,
+impl StateValidation {
+	pub fn new() -> Self {
+		Self {
+			inner: HashSet::new(),
+		}
 	}
 
-	// #[test]
-	// fn test() {
-	// 	let mut state = State::new();
-	// 	let loc = String::from("123");
-	// 	state.insert(WithRef { inner: &loc });
+	pub fn insert<T>(&mut self)
+	where
+		T: Any + Send + Sync,
+	{
+		self.inner.insert(TypeId::of::<T>());
+	}
 
-	// 	let with_ref = state.get::<WithRef>().unwrap();
-	// 	assert_eq!(with_ref.inner, "hello");
-	// }
+	pub fn validate<T>(&self) -> bool
+	where
+		T: Any + Send + Sync,
+	{
+		self.inner.contains(&TypeId::of::<T>())
+	}
 }

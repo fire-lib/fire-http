@@ -1,42 +1,59 @@
-use core::fmt;
 use std::convert::Infallible;
 use std::error::Error as StdError;
+use std::fmt;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::{future::Future, ops::Deref};
 
+use types::header::RequestHeader;
+
 use crate::error::{ClientErrorKind, ErrorKind};
+use crate::state::StateValidation;
 use crate::{
 	routes::{ParamsNames, PathParams},
 	state::State,
 	Request, Resources,
 };
 
-pub trait Extractor<'a> {
-	type Error: ExtractorError;
+#[non_exhaustive]
+pub struct Validate<'a> {
+	pub name: &'a str,
+	pub params: &'a ParamsNames<'a>,
+	pub state: &'a mut StateValidation,
+	pub resources: &'a Resources,
+}
 
-	fn validate_requirements(
-		name: &str,
-		params: &ParamsNames,
-		resources: &Resources,
-	);
+#[non_exhaustive]
+pub struct Prepare<'a> {
+	pub name: &'a str,
+	pub header: &'a RequestHeader,
+	pub params: &'a PathParams,
+	pub state: &'a mut State,
+	pub resources: &'a Resources,
+}
+
+#[non_exhaustive]
+pub struct Extract<'a, 'b, P, R> {
+	pub prepared: P,
+	pub name: &'b str,
+	pub request: &'b mut Option<R>,
+	pub params: &'a PathParams,
+	pub state: &'a State,
+	pub resources: &'a Resources,
+}
+
+pub trait Extractor<'a, R> {
+	type Error: ExtractorError;
+	type Prepared;
+
+	fn validate(validate: Validate<'_>);
 
 	fn prepare(
-		_name: &str,
-		_req: &mut Request,
-		_params: &PathParams,
-		_state: &mut State,
-		_resources: &Resources,
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>> {
-		Box::pin(async { Ok(()) })
-	}
+		prepare: Prepare<'_>,
+	) -> Pin<Box<dyn Future<Output = Result<Self::Prepared, Self::Error>> + Send>>;
 
 	fn extract(
-		name: &str,
-		request: &mut Option<&'a mut Request>,
-		params: &'a PathParams,
-		state: &'a State,
-		resources: &'a Resources,
+		extract: Extract<'a, '_, Self::Prepared, R>,
 	) -> Result<Self, Self::Error>
 	where
 		Self: Sized;
@@ -58,30 +75,78 @@ impl ExtractorError for Infallible {
 	}
 }
 
+impl<'a> Validate<'a> {
+	pub fn new(
+		name: &'a str,
+		params: &'a ParamsNames<'a>,
+		state: &'a mut StateValidation,
+		resources: &'a Resources,
+	) -> Self {
+		Self {
+			name,
+			params,
+			state,
+			resources,
+		}
+	}
+}
+
+impl<'a> Prepare<'a> {
+	pub fn new(
+		name: &'a str,
+		header: &'a RequestHeader,
+		params: &'a PathParams,
+		state: &'a mut State,
+		resources: &'a Resources,
+	) -> Self {
+		Self {
+			name,
+			header,
+			params,
+			state,
+			resources,
+		}
+	}
+}
+
+impl<'a, 'b, P, R> Extract<'a, 'b, P, R> {
+	pub fn new(
+		prepared: P,
+		name: &'b str,
+		request: &'b mut Option<R>,
+		params: &'a PathParams,
+		state: &'a State,
+		resources: &'a Resources,
+	) -> Self {
+		Self {
+			prepared,
+			name,
+			request,
+			params,
+			state,
+			resources,
+		}
+	}
+}
+
 pub struct Res<'a, T: ?Sized>(&'a T);
 
-impl<'a, T> Extractor<'a> for Res<'a, T>
+impl<'a, T, R> Extractor<'a, R> for Res<'a, T>
 where
 	T: Send + Sync + 'static,
 {
 	type Error = Infallible;
+	type Prepared = ();
 
-	fn validate_requirements(_: &str, _: &ParamsNames, resources: &Resources) {
-		resources.get::<T>().unwrap();
-	}
+	extractor_validate!(|validate| {
+		validate.resources.get::<T>().unwrap();
+	});
 
-	fn extract(
-		_name: &str,
-		_req: &mut Option<&'a mut Request>,
-		_params: &'a PathParams,
-		_state: &'a State,
-		resources: &'a Resources,
-	) -> Result<Self, Self::Error>
-	where
-		Self: Sized,
-	{
-		Ok(Res(resources.get::<T>().unwrap()))
-	}
+	extractor_prepare!();
+
+	extractor_extract!(|extract| {
+		Ok(Res(extract.resources.get::<T>().unwrap()))
+	});
 }
 
 impl<T> Deref for Res<'_, T> {
@@ -92,60 +157,99 @@ impl<T> Deref for Res<'_, T> {
 	}
 }
 
-impl<'a> Extractor<'a> for &'a mut Request {
+impl<'a> Extractor<'a, &'a mut Request> for &'a mut Request {
 	type Error = Infallible;
+	type Prepared = ();
 
-	fn validate_requirements(_: &str, _: &ParamsNames, _: &Resources) {}
+	extractor_validate!();
+
+	extractor_prepare!();
 
 	fn extract(
-		_name: &str,
-		request: &mut Option<&'a mut Request>,
-		_params: &'a PathParams,
-		_state: &'a State,
-		_resources: &'a Resources,
+		extract: Extract<'a, '_, Self::Prepared, &'a mut Request>,
 	) -> Result<Self, Self::Error>
 	where
 		Self: Sized,
 	{
-		Ok(request.take().unwrap())
+		Ok(extract.request.take().unwrap())
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PathParam<T>(T);
+pub type PathStr = PathParam<str>;
 
-impl<'a, T> Extractor<'a> for PathParam<T>
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct PathParam<T: ?Sized>(T);
+
+impl<'a, T, R> Extractor<'a, R> for PathParam<T>
 where
 	T: Send + Sync + FromStr + 'a,
 	T::Err: StdError + Send + Sync + 'static,
 {
 	type Error = PathError<T::Err>;
+	type Prepared = ();
 
-	fn validate_requirements(name: &str, names: &ParamsNames, _: &Resources) {
-		if !names.exists(name) {
-			panic!("Path parameter `{}` does not exist", name);
-		}
-	}
+	extractor_validate!(|validate| {
+		assert!(
+			validate.params.exists(validate.name),
+			"Path parameter `{}` does not exist",
+			validate.name
+		);
+	});
 
-	fn extract(
-		name: &str,
-		_req: &mut Option<&'a mut Request>,
-		params: &'a PathParams,
-		_state: &'a State,
-		_resources: &'a Resources,
-	) -> Result<Self, Self::Error>
-	where
-		Self: Sized,
-	{
-		params.parse(name).map(PathParam).map_err(PathError)
-	}
+	extractor_prepare!();
+
+	extractor_extract!(|extract| {
+		extract
+			.params
+			.parse(extract.name)
+			.map(PathParam)
+			.map_err(PathError)
+	});
 }
 
-impl<T> Deref for PathParam<T> {
+impl<'a, R> Extractor<'a, R> for &'a PathParam<str> {
+	type Error = Infallible;
+	type Prepared = ();
+
+	extractor_validate!(|validate| {
+		assert!(
+			validate.params.exists(validate.name),
+			"Path parameter `{}` does not exist",
+			validate.name
+		);
+	});
+
+	extractor_prepare!();
+
+	extractor_extract!(|extract| {
+		let s = extract.params.get(extract.name).unwrap();
+
+		// safe because `PathParam` is `repr(transparent)`
+		let s: &'a PathParam<str> =
+			unsafe { &*(s as *const str as *const PathParam<str>) };
+
+		Ok(s)
+	});
+}
+
+impl<T> Deref for PathParam<T>
+where
+	T: ?Sized,
+{
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+impl<T> fmt::Display for PathParam<T>
+where
+	T: fmt::Display + ?Sized,
+{
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		self.0.fmt(f)
 	}
 }
 
@@ -183,21 +287,13 @@ where
 	}
 }
 
-impl<'a> Extractor<'a> for &'a Resources {
+impl<'a, R: 'a> Extractor<'a, R> for &'a Resources {
 	type Error = Infallible;
+	type Prepared = ();
 
-	fn validate_requirements(_: &str, _: &ParamsNames, _: &Resources) {}
+	extractor_validate!();
 
-	fn extract(
-		_name: &str,
-		_req: &mut Option<&'a mut Request>,
-		_params: &'a PathParams,
-		_state: &'a State,
-		resources: &'a Resources,
-	) -> Result<Self, Self::Error>
-	where
-		Self: Sized,
-	{
-		Ok(resources)
-	}
+	extractor_prepare!();
+
+	extractor_extract!(|extract| { Ok(extract.resources) });
 }

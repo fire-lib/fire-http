@@ -16,7 +16,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
-	let inputs = validate_inputs(item.sig.inputs.iter(), true)?;
+	let inputs = validate_inputs(item.sig.inputs.iter())?;
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
