@@ -43,13 +43,14 @@ macro_rules! extractor_prepare {
 		fn prepare(
 			$prepare: $crate::extractor::Prepare<'_>,
 		) -> std::pin::Pin<
-			Box<
+			std::boxed::Box<
 				dyn std::future::Future<
 						Output = std::result::Result<
 							Self::Prepared,
 							Self::Error,
 						>,
-					> + Send,
+					> + Send
+					+ '_,
 			>,
 		> {
 			Box::pin(async move { $block })

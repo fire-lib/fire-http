@@ -6,6 +6,7 @@ use super::streamer::RawStreamer;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::future::poll_fn;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::Poll;
 
@@ -14,13 +15,13 @@ use tokio::time::{interval, Duration};
 
 use tracing::error;
 
-use fire::header::Method;
+use fire::header::{Method, RequestHeader};
 use fire::routes::{
 	HyperRequest, ParamsNames, PathParams, RawRoute, RoutePath,
 };
 pub use fire::util::PinnedFuture;
 use fire::ws::{self, JsonError, WebSocket};
-use fire::{Resources, Response};
+use fire::{resources::Resources, Response};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Request {
@@ -36,7 +37,12 @@ pub trait IntoStreamHandler {
 }
 
 pub trait StreamHandler {
-	fn validate_data(&self, _params: &ParamsNames, _data: &Resources) {}
+	fn validate_requirements(
+		&self,
+		_params: &ParamsNames,
+		_resources: &Resources,
+	) {
+	}
 
 	/// every MessageData needs to correspond with the StreamTrait
 	///
@@ -46,6 +52,7 @@ pub trait StreamHandler {
 	fn handle<'a>(
 		&'a self,
 		req: MessageData,
+		header: &'a RequestHeader,
 		params: &'a PathParams,
 		streamer: RawStreamer,
 		data: &'a Resources,
@@ -91,8 +98,9 @@ impl RawRoute for StreamServer {
 	fn call<'a>(
 		&'a self,
 		req: &'a mut HyperRequest,
+		address: SocketAddr,
 		params: &'a PathParams,
-		data: &'a Resources,
+		resources: &'a Resources,
 	) -> PinnedFuture<'a, Option<fire::Result<Response>>> {
 		PinnedFuture::new(async move {
 			let (on_upgrade, ws_accept) = match ws::util::upgrade(req) {
@@ -100,8 +108,14 @@ impl RawRoute for StreamServer {
 				Err(e) => return Some(Err(e)),
 			};
 
+			let header = fire::ws::util::hyper_req_to_header(req, address);
+			let header = match header {
+				Ok(h) => h,
+				Err(e) => return Some(Err(e)),
+			};
+
 			let handlers = self.inner.clone();
-			let data = data.clone();
+			let resources = resources.clone();
 			let params = params.clone();
 
 			// we need to spawn a future because
@@ -114,8 +128,10 @@ impl RawRoute for StreamServer {
 
 						trace!("connection upgraded");
 
-						let res =
-							handle_connection(handlers, ws, params, data).await;
+						let res = handle_connection(
+							handlers, ws, header, params, resources,
+						)
+						.await;
 						if let Err(e) = res {
 							error!("websocket connection failed with {:?}", e);
 						}
@@ -132,6 +148,7 @@ impl RawRoute for StreamServer {
 async fn handle_connection(
 	handlers: Arc<HashMap<Request, Box<dyn StreamHandler + Send + Sync>>>,
 	mut ws: WebSocket,
+	header: RequestHeader,
 	params: PathParams,
 	data: Resources,
 ) -> Result<(), UnrecoverableError> {
@@ -211,6 +228,7 @@ async fn handle_connection(
 						let data = data.clone();
 						let handlers = handlers.clone();
 						let msg_data = msg.data;
+						let header = header.clone();
 						let close_tx = close_tx.clone();
 						let params = params.clone();
 
@@ -219,7 +237,7 @@ async fn handle_connection(
 						// we could also detect a panic when trying to send
 						// or receive via a mpsc channel.
 						// but that could lead to multiple close messages being
-						// sent when the task succesfully exists
+						// sent when the task succesfully exits
 						tokio::spawn(async move {
 							let panic_close_tx = close_tx.clone();
 							let panic_req = req.clone();
@@ -233,6 +251,7 @@ async fn handle_connection(
 
 								let r = handler.handle(
 									msg_data,
+									&header,
 									&params,
 									streamer,
 									&data
@@ -328,6 +347,8 @@ struct Receivers {
 	// in the queue
 	// the problem here is that we don't return on the first one and always poll
 	// every future (which is not great)
+	//
+	// todo use a crate for this
 	recv_queue: Vec<(Request, MessageData)>,
 }
 

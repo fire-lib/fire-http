@@ -104,7 +104,6 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 			}));
 
 			let i = Literal::usize_unsuffixed(idx + 1);
-
 			let var_name = format_ident!("handler_arg_{idx}");
 
 			handler_args_vars.push(quote!(

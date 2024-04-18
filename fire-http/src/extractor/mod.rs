@@ -50,7 +50,13 @@ pub trait Extractor<'a, R> {
 
 	fn prepare(
 		prepare: Prepare<'_>,
-	) -> Pin<Box<dyn Future<Output = Result<Self::Prepared, Self::Error>> + Send>>;
+	) -> Pin<
+		Box<
+			dyn Future<Output = Result<Self::Prepared, Self::Error>>
+				+ Send
+				+ '_,
+		>,
+	>;
 
 	fn extract(
 		extract: Extract<'a, '_, Self::Prepared, R>,

@@ -1,7 +1,11 @@
 use super::error::StreamError;
 use super::message::MessageData;
 
-use std::marker::PhantomData;
+use fire::{
+	extractor::Extractor, extractor_extract, extractor_prepare,
+	extractor_validate,
+};
+use std::{convert::Infallible, marker::PhantomData};
 use tokio::sync::mpsc;
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -85,4 +89,25 @@ impl<M> Streamer<M> {
 			_ => panic!("Streamer: cannot receive, in sender mode"),
 		}
 	}
+}
+
+impl<'a, R, M> Extractor<'a, R> for Streamer<M>
+where
+	M: Send + 'static,
+{
+	type Error = Infallible;
+	type Prepared = Self;
+
+	extractor_validate!(|validate| {
+		assert!(
+			validate.state.validate::<Self>(),
+			"Stream not found in state"
+		);
+		// remove it from the state since we will use it
+		validate.state.remove::<Self>();
+	});
+
+	extractor_prepare!(|prepare| { Ok(prepare.state.remove().unwrap()) });
+
+	extractor_extract!(|extract| { Ok(extract.prepared) });
 }

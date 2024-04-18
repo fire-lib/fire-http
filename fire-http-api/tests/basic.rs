@@ -1,6 +1,7 @@
+use fire::extractor::PathParam;
 use fire_http_api as fire_api;
 
-use fire_api::error::{ApiError, Error as ErrorTrait, StatusCode};
+use fire_api::error::{self, Error as ApiError, StatusCode};
 use fire_api::testing::FirePitApi;
 use fire_api::{api, Method, Request};
 
@@ -16,13 +17,14 @@ pub enum Error {
 	Request(String),
 }
 
-impl ApiError for Error {
-	fn internal<E: ErrorTrait>(error: E) -> Self {
-		Self::Internal(error.to_string())
-	}
-
-	fn request<E: ErrorTrait>(error: E) -> Self {
-		Self::Request(error.to_string())
+impl error::ApiError for Error {
+	fn from_error(e: ApiError) -> Self {
+		match e {
+			ApiError::HeadersMissing(_) | ApiError::Deserialize(_) => {
+				Self::Request(e.to_string())
+			}
+			e => Self::Internal(e.to_string()),
+		}
 	}
 
 	fn status_code(&self) -> StatusCode {
@@ -87,9 +89,9 @@ impl Request for UserReq {
 }
 
 #[api(UserReq)]
-async fn user(req: UserReq, id: &String) -> Result<UserResp, Error> {
+async fn user(req: UserReq, id: &PathParam<str>) -> Result<UserResp, Error> {
 	Ok(UserResp {
-		id: id.clone(),
+		id: id.to_string(),
 		name: "John".into(),
 		image_size: req.image_size,
 	})
