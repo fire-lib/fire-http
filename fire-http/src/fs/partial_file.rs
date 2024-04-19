@@ -145,6 +145,7 @@ impl PartialFile {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct RangeIncorrect(pub Range);
 
 impl fmt::Display for RangeIncorrect {
