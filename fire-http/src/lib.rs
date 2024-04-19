@@ -1,9 +1,13 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 
+#[macro_use]
+mod macros;
 
 pub mod resources;
 use resources::Resources;
+
+pub mod state;
 
 pub mod routes;
 use routes::{Catcher, ParamsNames, RawRoute, Route, Routes};
@@ -16,6 +20,9 @@ use into::IntoRoute;
 
 pub mod error;
 pub use error::{Error, Result};
+
+pub mod extractor;
+pub use extractor::Res;
 
 mod server;
 use server::Server;

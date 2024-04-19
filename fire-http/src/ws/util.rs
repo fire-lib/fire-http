@@ -1,16 +1,15 @@
-use super::{LogWebSocketReturn, WebSocket};
+use std::net::SocketAddr;
+
+use super::LogWebSocketReturn;
 use crate::error::ClientErrorKind;
+use crate::extractor::ExtractorError;
 use crate::header::{
 	StatusCode, CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY,
 	SEC_WEBSOCKET_VERSION, UPGRADE,
 };
-use crate::routes::{ParamsNames, PathParams};
 use crate::server::HyperRequest;
-use crate::{Data, Response, Result};
-
-use std::any::{Any, TypeId};
-use std::cell::RefCell;
-use std::mem::ManuallyDrop;
+use crate::util::convert_hyper_req_to_fire_header;
+use crate::{Error, Response, Result};
 
 use tracing::error;
 
@@ -22,124 +21,7 @@ use hyper::upgrade::OnUpgrade;
 pub use tokio::task::spawn;
 
 use base64::prelude::{Engine as _, BASE64_STANDARD};
-
-fn is_ws<T: Any>() -> bool {
-	TypeId::of::<T>() == TypeId::of::<WebSocket>()
-}
-
-fn is_data<T: Any>() -> bool {
-	TypeId::of::<T>() == TypeId::of::<Data>()
-}
-
-fn is_path_params<T: Any>() -> bool {
-	TypeId::of::<T>() == TypeId::of::<PathParams>()
-}
-
-fn is_string<T: Any>() -> bool {
-	TypeId::of::<T>() == TypeId::of::<String>()
-}
-
-/// fn to check if a type can be accessed in a websocket handler as reference
-#[inline]
-pub fn valid_ws_data_as_ref<T: Any>(
-	name: &str,
-	params: &ParamsNames,
-	data: &Data,
-) -> bool {
-	is_ws::<T>()
-		|| is_data::<T>()
-		|| is_path_params::<T>()
-		|| (params.exists(name) && is_string::<T>())
-		|| data.exists::<T>()
-}
-
-/// fn to check if a type can be accessed in a websocket handler as owned
-#[inline]
-pub fn valid_ws_data_as_owned<T: Any>(
-	_name: &str,
-	_params: &ParamsNames,
-	_data: &Data,
-) -> bool {
-	is_ws::<T>()
-}
-
-pub struct DataManager<T> {
-	inner: RefCell<Option<T>>,
-}
-
-impl<T> DataManager<T> {
-	pub fn new(val: T) -> Self {
-		Self {
-			inner: RefCell::new(Some(val)),
-		}
-	}
-
-	/// ## Panics
-	/// if the value is already taken or borrowed
-	#[inline]
-	pub fn take(&self) -> T {
-		self.inner.borrow_mut().take().unwrap()
-	}
-
-	/// ## Panics
-	/// If the values is already taken or borrowed mutably
-	#[inline]
-	pub fn as_ref(&self) -> &T {
-		let r = self.inner.borrow();
-		let r = ManuallyDrop::new(r);
-		// since the borrow counter does not get decreased because of the
-		// ManuallyDrop and the lifetime not getting expanded this is safe
-		unsafe { &*(&**r as *const Option<T>) }.as_ref().unwrap()
-	}
-
-	/// ##Panics
-	/// if the value was taken previously
-	#[inline]
-	pub fn take_owned(mut self) -> T {
-		self.inner.get_mut().take().unwrap()
-	}
-}
-
-#[inline]
-pub fn get_ws_data_as_ref<'a, T: Any>(
-	name: &str,
-	ws: &'a DataManager<WebSocket>,
-	params: &'a PathParams,
-	data: &'a Data,
-) -> &'a T {
-	if is_ws::<T>() {
-		let ws = ws.as_ref();
-		<dyn Any>::downcast_ref(ws).unwrap()
-	} else if is_data::<T>() {
-		<dyn Any>::downcast_ref(data).unwrap()
-	} else if is_path_params::<T>() {
-		<dyn Any>::downcast_ref::<T>(params).unwrap()
-	} else if params.exists(name) && is_string::<T>() {
-		<dyn Any>::downcast_ref::<T>(params.get(name).unwrap()).unwrap()
-	} else {
-		data.get::<T>().unwrap()
-	}
-}
-
-#[inline]
-pub fn get_ws_data_as_owned<T: Any>(
-	_name: &str,
-	ws: &DataManager<WebSocket>,
-	_params: &PathParams,
-	_data: &Data,
-) -> T {
-	if is_ws::<T>() {
-		unsafe { transform_websocket(ws.take()) }
-	} else {
-		unreachable!()
-	}
-}
-
-/// Safety you need to know that T is `WebSocket`
-unsafe fn transform_websocket<T: Any>(ws: WebSocket) -> T {
-	let mut ws = ManuallyDrop::new(ws);
-	(&mut ws as *mut ManuallyDrop<WebSocket> as *mut T).read()
-}
+use types::header::RequestHeader;
 
 /// we need to expose this instead of inlining it in the macro since
 /// tracing logs the crate name and we wan't it to be associated with
@@ -148,6 +30,7 @@ unsafe fn transform_websocket<T: Any>(ws: WebSocket) -> T {
 pub fn upgrade_error(e: hyper::Error) {
 	error!("websocket upgrade error {:?}", e);
 }
+
 /// we need to expose this instead of inlining it in the macro since
 /// tracing logs the crate name and we wan't it to be associated with
 /// fire http instead of the crate that uses the macro
@@ -156,6 +39,16 @@ pub fn log_websocket_return(r: impl LogWebSocketReturn) {
 	if r.should_log_error() {
 		error!("websocket connection closed with error {:?}", r);
 	}
+}
+
+/// we need to expose this instead of inlining it in the macro since
+/// tracing logs the crate name and we wan't it to be associated with
+/// fire http instead of the crate that uses the macro
+#[doc(hidden)]
+pub fn log_extractor_error(r: impl ExtractorError) {
+	let err = r.into_std();
+
+	error!("websocket extractor error: {}", err);
 }
 
 // does the key need to be a specific length?
@@ -203,4 +96,17 @@ pub fn switching_protocols(ws_accept: String) -> Response {
 		.header(UPGRADE, "websocket")
 		.header(SEC_WEBSOCKET_ACCEPT, ws_accept)
 		.build()
+}
+
+#[doc(hidden)]
+pub fn hyper_req_to_header(
+	req: &mut HyperRequest,
+	address: SocketAddr,
+) -> Result<RequestHeader> {
+	convert_hyper_req_to_fire_header(req, address).map_err(|e| {
+		Error::new(
+			ClientErrorKind::BadRequest,
+			format!("failed to convert hyper request {:?}", e),
+		)
+	})
 }

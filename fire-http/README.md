@@ -1,15 +1,16 @@
 A simple http server library.
 
 ## Example
+
 ```rust no_run
 # use fire_http as fire;
-use fire::get;
+use fire::{get, Res};
 
 struct GlobalName(String);
 
 // handle a simple get request
 #[get("/")]
-fn root(global_name: &GlobalName) -> String {
+fn root(global_name: Res<GlobalName>) -> String {
 	format!("Hi, this is {}", global_name.0)
 }
 
@@ -28,8 +29,9 @@ async fn main() {
 For more examples look in the examples directory and the test directory.
 
 ## Features
-- json
-- fs
-- http2 (enables http 2 support)
-- ws (adds websocket support)
-- trace
+
+-   json
+-   fs
+-   http2 (enables http 2 support)
+-   ws (adds websocket support)
+-   trace

@@ -1,6 +1,9 @@
 #[doc(hidden)]
 pub mod util;
 
+use crate::extractor::Extractor;
+
+use std::convert::Infallible;
 use std::fmt;
 use std::str::Utf8Error;
 
@@ -262,3 +265,16 @@ mod json_error {
 
 #[cfg(feature = "json")]
 pub use json_error::JsonError;
+
+impl<'a> Extractor<'a, WebSocket> for WebSocket {
+	type Error = Infallible;
+	type Prepared = ();
+
+	extractor_validate!();
+
+	extractor_prepare!();
+
+	extractor_extract!(<WebSocket> |extract| {
+		Ok(extract.request.take().unwrap())
+	});
+}
