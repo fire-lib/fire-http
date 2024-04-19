@@ -23,6 +23,13 @@ impl State {
 		self.inner.insert(TypeId::of::<T>(), Box::new(data));
 	}
 
+	pub fn contains<T>(&self) -> bool
+	where
+		T: Any + Send,
+	{
+		self.inner.contains_key(&TypeId::of::<T>())
+	}
+
 	pub fn get<T>(&self) -> Option<&T>
 	where
 		T: Any + Send,

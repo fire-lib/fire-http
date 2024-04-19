@@ -7,7 +7,7 @@ use std::{future::Future, ops::Deref};
 
 use types::header::RequestHeader;
 
-use crate::error::{ClientErrorKind, ErrorKind};
+use crate::error::{ClientErrorKind, ErrorKind, ServerErrorKind};
 use crate::state::StateValidation;
 use crate::{
 	routes::{ParamsNames, PathParams},
@@ -78,6 +78,39 @@ impl ExtractorError for Infallible {
 
 	fn into_std(self) -> Box<dyn StdError + Send + Sync> {
 		unreachable!()
+	}
+}
+
+#[derive(Debug)]
+pub struct InternalError<E>(pub E);
+
+impl<E> ExtractorError for InternalError<E>
+where
+	E: Into<Box<dyn StdError + Send + Sync>> + StdError + Send + Sync,
+{
+	fn error_kind(&self) -> ErrorKind {
+		ServerErrorKind::InternalServerError.into()
+	}
+
+	fn into_std(self) -> Box<dyn StdError + Send + Sync> {
+		self.0.into()
+	}
+}
+
+impl<E> StdError for InternalError<E> where E: StdError {}
+
+impl<E> fmt::Display for InternalError<E>
+where
+	E: fmt::Display,
+{
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		self.0.fmt(f)
+	}
+}
+
+impl<E> From<E> for InternalError<E> {
+	fn from(e: E) -> Self {
+		Self(e)
 	}
 }
 
@@ -179,6 +212,25 @@ impl<'a> Extractor<'a, &'a mut Request> for &'a mut Request {
 	{
 		Ok(extract.request.take().unwrap())
 	}
+}
+
+impl<'a, R> Extractor<'a, R> for &'a RequestHeader {
+	type Error = Infallible;
+	type Prepared = ();
+
+	extractor_validate!();
+
+	extractor_prepare!(|prepare| {
+		if !prepare.state.contains::<RequestHeader>() {
+			prepare
+				.state
+				.insert::<RequestHeader>(prepare.header.clone());
+		}
+
+		Ok(())
+	});
+
+	extractor_extract!(|extract| { Ok(extract.state.get().unwrap()) });
 }
 
 pub type PathStr = PathParam<str>;
