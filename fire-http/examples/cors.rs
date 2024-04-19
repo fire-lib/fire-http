@@ -5,9 +5,10 @@ use fire::header::{
 	ACCESS_CONTROL_ALLOW_ORIGIN, X_XSS_PROTECTION,
 };
 use fire::header::{RequestHeader, ResponseHeader, StatusCode};
+use fire::resources::Resources;
 use fire::routes::Catcher;
 use fire::util::PinnedFuture;
-use fire::{get, Data, Request, Response};
+use fire::{get, Request, Response};
 
 #[get("/")]
 fn hello_world() -> &'static str {
@@ -25,7 +26,7 @@ impl Catcher for CorsHeaders {
 		&'a self,
 		req: &'a mut Request,
 		res: &'a mut Response,
-		_data: &'a Data,
+		_data: &'a Resources,
 	) -> PinnedFuture<'a, fire::Result<()>> {
 		let values = &mut res.header.values;
 

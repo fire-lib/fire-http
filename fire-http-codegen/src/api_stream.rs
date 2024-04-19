@@ -1,10 +1,17 @@
+/*
+Expose
+
+req,
+streamer
+Resources,
+
+*/
+
 use crate::route::generate_struct;
-use crate::util::{
-	fire_api_crate, ref_type, validate_inputs, validate_signature,
-};
+use crate::util::{fire_api_crate, validate_inputs, validate_signature};
 use crate::ApiArgs;
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 use syn::{ItemFn, Result};
 
@@ -16,14 +23,46 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 
 	validate_signature(&item.sig)?;
 
+	// implement Extractor for req_ty
+	let impl_extractor = quote!(
+		impl<'a> #fire::extractor::Extractor<'a, #stream_ty> for #stream_ty {
+			type Error = std::convert::Infallible;
+			type Prepared = ();
+
+			fn validate(_validate: #fire::extractor::Validate<'_>) {}
+
+			fn prepare(
+				_prepare: #fire::extractor::Prepare<'_>,
+			) -> std::pin::Pin<
+				Box<
+					dyn std::future::Future<
+						Output = std::result::Result<Self::Prepared, Self::Error>,
+					> + Send,
+				>,
+			> {
+				Box::pin(async move { Ok(()) })
+			}
+
+			fn extract(
+				extract: #fire::extractor::Extract<'a, '_, Self::Prepared, #stream_ty>,
+			) -> std::result::Result<Self, Self::Error>
+			where
+				Self: Sized,
+			{
+				Ok(extract.request.take().unwrap())
+			}
+		}
+	);
+
 	// Box<Type>
-	let inputs = validate_inputs(item.sig.inputs.iter(), false)?;
+	let inputs = validate_inputs(item.sig.inputs.iter())?;
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
 
 	//
 	let ty_as_stream = quote!(<#stream_ty as #stream_mod::Stream>);
+	let extractor_type = quote!(#fire::extractor::Extractor<#stream_ty>);
 
 	let into_stream_impl = quote!(
 		impl #stream_mod::server::IntoStreamHandler for #struct_name {
@@ -38,33 +77,27 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 		let mut asserts = vec![];
 
 		for (name, ty) in &inputs {
-			let valid_fn = match ref_type(&ty) {
-				Some(reff) => {
-					let elem = &reff.elem;
-					quote!(
-						#stream_mod::util::valid_stream_data_as_ref
-							::<#elem, #stream_ty>
-					)
-				}
-				None => quote!(
-					#stream_mod::util::valid_stream_data_as_owned
-						::<#ty, #stream_ty>
-				),
-			};
+			asserts.push(quote!({
+				let validate = #fire::extractor::Validate::new(
+					#name, params, &mut state, resources
+				);
 
-			let error_msg = format!("could not find {}", quote!(#ty));
-
-			asserts.push(quote!(
-				assert!(#valid_fn(#name, params, data), #error_msg);
-			));
+				<#ty as #extractor_type>::validate(
+					validate
+				);
+			}));
 		}
 
 		quote!(
-			fn validate_data(
+			fn validate_requirements(
 				&self,
 				params: &#fire::routes::ParamsNames,
-				data: &#fire::Data
+				resources: &#fire::resources::Resources
 			) {
+				#[allow(unused_mut, dead_code)]
+				let mut state = #fire::state::StateValidation::new();
+				state.insert::<#stream_ty>();
+
 				#(#asserts)*
 			}
 		)
@@ -88,28 +121,46 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 
 		let mut handler_args_vars = vec![];
 		let mut handler_args = vec![];
+		let mut prepare_extractors = vec![];
 
 		for (idx, (name, ty)) in inputs.iter().enumerate() {
-			let get_fn = match ref_type(&ty) {
-				Some(reff) => {
-					let elem = &reff.elem;
-					quote!(
-						#stream_mod::util::get_stream_data_as_ref
-							::<#elem, #stream_ty>
-					)
-				}
-				None => {
-					quote!(
-						#stream_mod::util::get_stream_data_as_owned
-							::<#ty, #stream_ty>
-					)
-				}
-			};
+			prepare_extractors.push(quote!({
+				let prepare = #fire::extractor::Prepare::new(
+					#name, header, params, &mut state, resources
+				);
 
+				let res = <#ty as #extractor_type>::prepare(
+					prepare
+				).await;
+
+				match res {
+					Ok(res) => res,
+					Err(e) => {
+						return Err(#stream_mod::util::extraction_error::<#stream_ty>(e));
+					}
+				}
+			}));
+
+			let i = Literal::usize_unsuffixed(idx + 1);
 			let var_name = format_ident!("handler_arg_{idx}");
 
 			handler_args_vars.push(quote!(
-				let #var_name = #get_fn(#name, &streamer, &req, params, &data);
+				let #var_name = {
+					let extract = #fire::extractor::Extract::new(
+						prepared.#i, #name, &mut req, &params, &state, &resources
+					);
+
+					let res = <#ty as #extractor_type>::extract(
+						extract
+					);
+
+					match res {
+						Ok(res) => res,
+						Err(e) => {
+							return Err(#stream_mod::util::extraction_error::<#stream_ty>(e));
+						}
+					}
+				};
 			));
 			handler_args.push(quote!(#var_name));
 		}
@@ -118,9 +169,10 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 			fn handle<'a>(
 				&'a self,
 				req: #stream_mod::message::MessageData,
+				header: &'a #fire::header::RequestHeader,
 				params: &'a #fire::routes::PathParams,
 				streamer: #stream_mod::streamer::RawStreamer,
-				data: &'a #fire::Data
+				resources: &'a #fire::resources::Resources
 			) -> #stream_mod::server::PinnedFuture<'a, std::result::Result<
 				#stream_mod::message::MessageData,
 				#stream_mod::error::UnrecoverableError
@@ -132,17 +184,24 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 				async fn _handle(
 					streamer: #stream_mod::streamer::RawStreamer,
 					req: #stream_ty,
+					header: &#fire::header::RequestHeader,
 					params: &#fire::routes::PathParams,
-					data: &#fire::Data
+					resources: &#fire::resources::Resources
 				) -> std::result::Result<(), __Error> {
 					// transform streamer
 					let streamer = #stream_mod::util::transform_streamer
 						::<#stream_ty>(streamer);
 
-					let mut req = #fire_api::util::DataManager::new(req);
-					let mut streamer = #fire_api::util::DataManager::new(
-						streamer
+					#[allow(unused_mut, dead_code)]
+					let mut state = #fire::state::State::new();
+					state.insert(streamer);
+
+					// prepare extractions
+					let prepared = (0,// this is a placeholder
+						#(#prepare_extractors),*
 					);
+
+					let mut req = Some(req);
 
 					#(#handler_args_vars)*
 
@@ -154,7 +213,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 				#stream_mod::server::PinnedFuture::new(async move {
 					let req = #stream_mod::util::deserialize_req(req)?;
 
-					let r = _handle(streamer, req, params, data).await;
+					let r = _handle(streamer, req, header, params, resources).await;
 					#stream_mod::util::error_to_data::<#stream_ty>(r)
 				})
 			}
@@ -162,6 +221,8 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 	};
 
 	Ok(quote!(
+		#impl_extractor
+
 		#struct_gen
 
 		#into_stream_impl

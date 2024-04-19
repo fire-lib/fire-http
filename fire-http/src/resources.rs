@@ -3,42 +3,42 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct Data {
+pub struct Resources {
 	inner: Arc<HashMap<TypeId, Box<dyn Any + Send + Sync>>>,
 }
 
-impl Data {
+impl Resources {
 	pub(crate) fn new() -> Self {
 		Self {
 			inner: Arc::new(HashMap::new()),
 		}
 	}
 
-	pub fn exists<D>(&self) -> bool
+	pub fn exists<R>(&self) -> bool
 	where
-		D: Any,
+		R: Any,
 	{
-		self.inner.contains_key(&TypeId::of::<D>())
+		self.inner.contains_key(&TypeId::of::<R>())
 	}
 
 	/// returns true if the data already existed
-	pub(crate) fn insert<D>(&mut self, data: D) -> bool
+	pub(crate) fn insert<R>(&mut self, data: R) -> bool
 	where
-		D: Any + Send + Sync,
+		R: Any + Send + Sync,
 	{
 		let map = Arc::get_mut(&mut self.inner).unwrap();
 		map.insert(data.type_id(), Box::new(data)).is_some()
 	}
 
-	pub fn get<D>(&self) -> Option<&D>
+	pub fn get<R>(&self) -> Option<&R>
 	where
-		D: Any,
+		R: Any,
 	{
 		self.inner
-			.get(&TypeId::of::<D>())
+			.get(&TypeId::of::<R>())
 			.and_then(|a| a.downcast_ref())
 	}
 }
 
 #[cfg(feature = "graphql")]
-impl juniper::Context for Data {}
+impl juniper::Context for Resources {}

@@ -4,17 +4,20 @@
 Make web apis.
 
 ## Features
-- stream
+
+-   stream
 
 ## Example
+
 ```rust no_run
 # use fire_http_api as api;
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
 use api::{Request, Method};
-use api::error::{ApiError, Error as ErrorTrait, StatusCode};
+use api::error::{self, Error as ApiError, StatusCode};
 use api::{fire, api};
+use fire::impl_res_extractor;
 
 use serde::{Serialize, Deserialize};
 
@@ -27,13 +30,15 @@ pub enum Error {
 	Request(String)
 }
 
-impl ApiError for Error {
-	fn internal<E: ErrorTrait>(e: E) -> Self {
-		Self::Internal(e.to_string())
-	}
-
-	fn request<E: ErrorTrait>(e: E) -> Self {
-		Self::Request(e.to_string())
+impl error::ApiError for Error {
+	fn from_error(e: ApiError) -> Self {
+		match e {
+			ApiError::HeadersMissing(_) |
+			ApiError::Deserialize(_) => {
+				Self::Request(e.to_string())
+			}
+			e => Self::Internal(e.to_string()),
+		}
 	}
 
 	fn status_code(&self) -> StatusCode {
@@ -83,6 +88,8 @@ impl Request for SetNameReq {
 // -- implementations
 
 struct SharedName(Mutex<Name>);
+
+impl_res_extractor!(SharedName);
 
 #[api(NameReq)]
 fn get_name(req: NameReq, name: &SharedName) -> Result<Name, Error> {

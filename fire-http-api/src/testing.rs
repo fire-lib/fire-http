@@ -1,13 +1,14 @@
 // todo if this should ever be used outside of testing the uri parameter
 // should be replaced with a hashmap or something simiar
-
 use crate::error::ApiError;
 
-use fire::routes::ParamsNames;
-use serde::de::DeserializeOwned;
-
 use fire::header::{HeaderValues, Method, Mime, StatusCode};
-use fire::{Body, Data, Error, FirePit, Request, Response};
+use fire::resources::Resources;
+use fire::routes::ParamsNames;
+use fire::{Body, Error, FirePit, Request, Response};
+
+use representation::request::DeserializeError;
+use serde::de::DeserializeOwned;
 
 pub struct FirePitApi {
 	inner: FirePit,
@@ -18,7 +19,7 @@ impl FirePitApi {
 		Self { inner }
 	}
 
-	pub fn data(&self) -> &Data {
+	pub fn data(&self) -> &Resources {
 		self.inner.data()
 	}
 
@@ -101,15 +102,26 @@ impl FirePitApi {
 			.route(req)
 			.await
 			.unwrap()
-			.map_err(|e| R::Error::request(e.to_string()))?;
+			.map_err(crate::error::Error::Fire)
+			.map_err(R::Error::from_error)?;
 
 		if resp.header().status_code() != &StatusCode::OK {
-			return Err(resp.body.deserialize().await.unwrap());
+			let e = resp
+				.body
+				.deserialize()
+				.await
+				.map_err(DeserializeError::Json)
+				.map_err(crate::error::Error::Deserialize)
+				.map_err(R::Error::from_error)?;
+
+			return Err(e);
 		}
 
 		resp.take_body()
 			.deserialize()
 			.await
-			.map_err(|e| R::Error::internal(e.to_string()))
+			.map_err(DeserializeError::Json)
+			.map_err(crate::error::Error::Deserialize)
+			.map_err(R::Error::from_error)
 	}
 }

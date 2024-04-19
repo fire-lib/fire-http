@@ -1,10 +1,18 @@
+/*
+Expose
+
+req,
+header,
+ResponseSettings,
+Resources,
+
+*/
+
 use crate::route::generate_struct;
-use crate::util::{
-	fire_api_crate, ref_type, validate_inputs, validate_signature,
-};
+use crate::util::{fire_api_crate, validate_inputs, validate_signature};
 use crate::ApiArgs;
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 use syn::{ItemFn, Result};
 
@@ -15,49 +23,74 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 
 	validate_signature(&item.sig)?;
 
+	// implement Extractor for req_ty
+	let impl_extractor = quote!(
+		impl<'a> #fire::extractor::Extractor<'a, #req_ty> for #req_ty {
+			type Error = std::convert::Infallible;
+			type Prepared = ();
+
+			fn validate(_validate: #fire::extractor::Validate<'_>) {}
+
+			fn prepare(
+				_prepare: #fire::extractor::Prepare<'_>,
+			) -> std::pin::Pin<
+				Box<
+					dyn std::future::Future<
+						Output = std::result::Result<Self::Prepared, Self::Error>,
+					> + Send,
+				>,
+			> {
+				Box::pin(async move { Ok(()) })
+			}
+
+			fn extract(
+				extract: #fire::extractor::Extract<'a, '_, Self::Prepared, #req_ty>,
+			) -> std::result::Result<Self, Self::Error>
+			where
+				Self: Sized,
+			{
+				Ok(extract.request.take().unwrap())
+			}
+		}
+	);
+
 	// Box<Type>
-	let inputs = validate_inputs(item.sig.inputs.iter(), true)?;
+	let inputs = validate_inputs(item.sig.inputs.iter())?;
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
 
 	//
 	let ty_as_req = quote!(<#req_ty as #fire_api::Request>);
+	let extractor_type = quote!(#fire::extractor::Extractor<#req_ty>);
 
 	let valid_data_fn = {
 		let mut asserts = vec![];
 
 		for (name, ty) in &inputs {
-			let error_msg = format!("could not find {}", quote!(#ty));
+			asserts.push(quote!({
+				let validate = #fire::extractor::Validate::new(
+					#name, params, &mut state, resources
+				);
 
-			let valid_fn = match ref_type(&ty) {
-				Some(reff) if reff.mutability.is_some() => {
-					let elem = &reff.elem;
-					quote!(
-						#fire_api::util::valid_route_data_as_mut
-							::<#elem, #req_ty>
-					)
-				}
-				Some(reff) => {
-					let elem = &reff.elem;
-					quote!(
-						#fire_api::util::valid_route_data_as_ref
-							::<#elem, #req_ty>
-					)
-				}
-				None => quote!(
-					#fire_api::util::valid_route_data_as_owned
-						::<#ty, #req_ty>
-				),
-			};
-
-			asserts.push(quote!(
-				assert!(#valid_fn(#name, params, data), #error_msg);
-			));
+				<#ty as #extractor_type>::validate(
+					validate
+				);
+			}));
 		}
 
 		quote!(
-			fn validate_data(&self, params: &#fire::routes::ParamsNames, data: &#fire::Data) {
+			fn validate_requirements(
+				&self,
+				params: &#fire::routes::ParamsNames,
+				resources: &#fire::resources::Resources
+			) {
+				#[allow(unused_mut, dead_code)]
+				let mut state = #fire::state::StateValidation::new();
+				state.insert::<#fire::state::StateRefCell<
+					#fire_api::response::ResponseSettings
+				>>();
+
 				#(#asserts)*
 			}
 		)
@@ -91,33 +124,46 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 
 		let mut handler_args_vars = vec![];
 		let mut handler_args = vec![];
+		let mut prepare_extractors = vec![];
 
 		for (idx, (name, ty)) in inputs.iter().enumerate() {
-			let get_fn = match ref_type(&ty) {
-				Some(reff) if reff.mutability.is_some() => {
-					let elem = &reff.elem;
-					quote!(
-						#fire_api::util::get_route_data_as_mut
-							::<#elem, #req_ty>
-					)
-				}
-				Some(reff) => {
-					let elem = &reff.elem;
-					quote!(
-						#fire_api::util::get_route_data_as_ref
-							::<#elem, #req_ty>
-					)
-				}
-				None => quote!(
-					#fire_api::util::get_route_data_as_owned
-						::<#ty, #req_ty>
-				),
-			};
+			prepare_extractors.push(quote!({
+				let prepare = #fire::extractor::Prepare::new(
+					#name, header, params, &mut state, resources
+				);
 
+				let res = <#ty as #extractor_type>::prepare(
+					prepare
+				).await;
+
+				match res {
+					Ok(res) => res,
+					Err(e) => {
+						return Err(#fire_api::util::extraction_error::<#req_ty>(e));
+					}
+				}
+			}));
+
+			let i = Literal::usize_unsuffixed(idx + 1);
 			let var_name = format_ident!("handler_arg_{idx}");
 
 			handler_args_vars.push(quote!(
-				let #var_name = #get_fn(#name, &req, &header, params, &resp_header, data);
+				let #var_name = {
+					let extract = #fire::extractor::Extract::new(
+						prepared.#i, #name, &mut req, &params, &state, &resources
+					);
+
+					let res = <#ty as #extractor_type>::extract(
+						extract
+					);
+
+					match res {
+						Ok(res) => res,
+						Err(e) => {
+							return Err(#fire_api::util::extraction_error::<#req_ty>(e));
+						}
+					}
+				};
 			));
 			handler_args.push(quote!(#var_name));
 		}
@@ -127,7 +173,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 				&'a self,
 				req: &'a mut #fire::Request,
 				params: &'a #fire::routes::PathParams,
-				data: &'a #fire::Data
+				resources: &'a #fire::resources::Resources
 			) -> #fire::util::PinnedFuture<'a, #fire::Result<#fire::Response>> {
 				#handler_fn
 
@@ -137,7 +183,7 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 				async fn route_to_body(
 					fire_req: &mut #fire::Request,
 					params: &#fire::routes::PathParams,
-					data: &#fire::Data
+					resources: &#fire::resources::Resources
 				) -> std::result::Result<(
 					#fire_api::response::ResponseSettings,
 					#fire::Body
@@ -148,11 +194,18 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 						fire_req
 					).await?;
 
-					let req = #fire_api::util::DataManager::new(req);
+					#[allow(unused_mut, dead_code)]
+					let mut state = #fire::state::State::new();
+					state.insert(#fire_api::response::ResponseSettings::new_for_state());
+
 					let header = fire_req.header();
-					let resp_header = #fire_api::util::DataManager::new(
-						#fire_api::response::ResponseSettings::new()
+
+					// prepare extractions
+					let prepared = (0,// this is a placeholder
+						#(#prepare_extractors),*
 					);
+
+					let mut req = Some(req);
 
 					#(#handler_args_vars)*
 
@@ -160,13 +213,17 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 							#(#handler_args),*
 					)#await_kw?;
 
+					let resp_header = state.remove::<
+						#fire::state::StateRefCell<#fire_api::response::ResponseSettings>
+					>().unwrap();
+
 					#fire_api::util::serialize_resp::<#req_ty>(&resp)
-						.map(|body| (resp_header.take_owned(), body))
+						.map(|body| (resp_header.into_inner(), body))
 				}
 
 				#fire::util::PinnedFuture::new(async move {
 					#fire_api::util::transform_body_to_response::<#req_ty>(
-						route_to_body(req, params, data).await
+						route_to_body(req, params, resources).await
 					)
 				})
 			}
@@ -174,6 +231,8 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 	};
 
 	Ok(quote!(
+		#impl_extractor
+
 		#struct_gen
 
 		impl #fire::routes::Route for #struct_name {

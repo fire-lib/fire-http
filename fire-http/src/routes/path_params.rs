@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+	collections::{HashMap, HashSet},
+	str::FromStr,
+};
 
 use byte_parser::{ParseIterator, StrParser};
 use matchit::Params;
@@ -23,8 +26,15 @@ impl PathParams {
 		self.inner.get(key.as_ref()).is_some()
 	}
 
-	pub fn get(&self, key: impl AsRef<str>) -> Option<&String> {
-		self.inner.get(key.as_ref())
+	pub fn parse<T>(&self, key: impl AsRef<str>) -> Result<T, T::Err>
+	where
+		T: FromStr,
+	{
+		self.inner.get(key.as_ref()).unwrap().parse()
+	}
+
+	pub fn get(&self, key: impl AsRef<str>) -> Option<&str> {
+		self.inner.get(key.as_ref()).map(|s| s.as_str())
 	}
 }
 
@@ -37,7 +47,7 @@ impl PathParams {
 
 #[derive(Debug, Clone)]
 pub struct ParamsNames<'a> {
-	pub list: HashSet<&'a str>,
+	list: HashSet<&'a str>,
 }
 
 impl<'a> ParamsNames<'a> {
