@@ -1,9 +1,10 @@
+use fire::resources::Resources;
 use fire_http as fire;
 
 use fire::header::{Mime, RequestHeader, ResponseHeader, StatusCode};
 use fire::routes::Catcher;
 use fire::util::PinnedFuture;
-use fire::{get, post, Body, Data, Request, Response};
+use fire::{get, post, Body, Request, Response};
 
 #[macro_use]
 mod util;
@@ -98,7 +99,7 @@ async fn test_catcher() {
 			&'a self,
 			_req: &'a mut Request,
 			resp: &'a mut Response,
-			_data: &'a Data,
+			_data: &'a Resources,
 		) -> PinnedFuture<'a, fire::Result<()>> {
 			PinnedFuture::new(async move {
 				*resp = Response::builder()

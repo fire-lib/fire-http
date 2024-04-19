@@ -5,7 +5,7 @@ use crate::error::ClientErrorKind;
 use crate::header::{self, Method, Mime, RequestHeader, StatusCode};
 use crate::routes::{ParamsNames, PathParams, Route, RoutePath};
 use crate::util::PinnedFuture;
-use crate::{Body, Data, Error, Request, Response};
+use crate::{Body, Error, Request, Resources, Response};
 
 use std::any::{Any, TypeId};
 
@@ -28,7 +28,7 @@ impl GraphiQl {
 }
 
 impl Route for GraphiQl {
-	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
+	fn validate_requirements(&self, _params: &ParamsNames, _data: &Resources) {}
 
 	fn path(&self) -> RoutePath {
 		RoutePath {
@@ -41,7 +41,7 @@ impl Route for GraphiQl {
 		&'a self,
 		_req: &'a mut Request,
 		_params: &'a PathParams,
-		_: &'a Data,
+		_: &'a Resources,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		PinnedFuture::new(async move {
 			Ok(Response::html(graphiql::graphiql_source(self.graphql_uri)))
@@ -50,7 +50,7 @@ impl Route for GraphiQl {
 }
 
 pub struct GraphQlContext {
-	data: Data,
+	data: Resources,
 	request_header: RequestHeader,
 }
 
@@ -107,7 +107,7 @@ where
 	Sub::TypeInfo: Send + Sync,
 	S: ScalarValue + Send + Sync,
 {
-	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
+	fn validate_requirements(&self, _params: &ParamsNames, _data: &Resources) {}
 
 	fn path(&self) -> RoutePath {
 		RoutePath {
@@ -120,7 +120,7 @@ where
 		&'a self,
 		req: &'a mut Request,
 		_params: &'a PathParams,
-		data: &'a Data,
+		data: &'a Resources,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		PinnedFuture::new(async move {
 			// get content-type of request

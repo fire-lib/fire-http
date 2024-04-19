@@ -1,9 +1,10 @@
 use fire_http as fire;
 
 use fire::header::{RequestHeader, ResponseHeader, StatusCode};
+use fire::resources::Resources;
 use fire::routes::Catcher;
 use fire::util::PinnedFuture;
-use fire::{get, Data, Request, Response, Result};
+use fire::{get, Request, Response, Result};
 
 #[get("/")]
 fn hello_world() -> &'static str {
@@ -21,7 +22,7 @@ impl Catcher for Error404Handler {
 		&'a self,
 		req: &'a mut Request,
 		resp: &'a mut Response,
-		_data: &'a Data,
+		_data: &'a Resources,
 	) -> PinnedFuture<'a, Result<()>> {
 		PinnedFuture::new(async move {
 			let path = req.header().uri().path();

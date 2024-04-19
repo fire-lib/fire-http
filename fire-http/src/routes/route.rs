@@ -2,7 +2,7 @@ use super::{ParamsNames, PathParams};
 
 use crate::header::Method;
 use crate::util::PinnedFuture;
-use crate::{Data, Request, Response};
+use crate::{Request, Resources, Response};
 
 use std::borrow::Cow;
 
@@ -18,7 +18,11 @@ pub struct RoutePath {
 /// you.
 pub trait Route: Send + Sync {
 	// check if every data you expect is in Data
-	fn validate_data(&self, params: &ParamsNames, data: &Data);
+	fn validate_requirements(
+		&self,
+		params: &ParamsNames,
+		resources: &Resources,
+	);
 
 	// get's only called once
 	fn path(&self) -> RoutePath;
@@ -27,6 +31,6 @@ pub trait Route: Send + Sync {
 		&'a self,
 		req: &'a mut Request,
 		params: &'a PathParams,
-		data: &'a Data,
+		resources: &'a Resources,
 	) -> PinnedFuture<'a, crate::Result<Response>>;
 }

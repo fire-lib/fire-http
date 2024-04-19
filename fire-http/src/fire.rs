@@ -3,7 +3,7 @@ use crate::server::HyperRequest;
 use crate::util::{
 	convert_fire_resp_to_hyper_resp, convert_hyper_req_to_fire_req,
 };
-use crate::{Data, Error, Request};
+use crate::{Error, Request, Resources};
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -48,13 +48,17 @@ impl RequestConfigs {
 
 // IncredientsForAFire
 pub(crate) struct Wood {
-	data: Data,
+	data: Resources,
 	routes: Routes,
 	configs: RequestConfigs,
 }
 
 impl Wood {
-	pub fn new(data: Data, routes: Routes, configs: RequestConfigs) -> Self {
+	pub fn new(
+		data: Resources,
+		routes: Routes,
+		configs: RequestConfigs,
+	) -> Self {
 		Self {
 			data,
 			routes,
@@ -66,7 +70,7 @@ impl Wood {
 		&self.routes
 	}
 
-	pub fn data(&self) -> &Data {
+	pub fn data(&self) -> &Resources {
 		&self.data
 	}
 

@@ -6,7 +6,7 @@ use crate::header::{Method, StatusCode};
 use crate::into::{IntoResponse, IntoRoute};
 use crate::routes::{ParamsNames, PathParams, Route, RoutePath};
 use crate::util::PinnedFuture;
-use crate::{Data, Error, Request, Response};
+use crate::{Error, Request, Resources, Response};
 
 use std::borrow::Cow;
 use std::io;
@@ -200,7 +200,7 @@ pub struct StaticFilesRoute {
 }
 
 impl Route for StaticFilesRoute {
-	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
+	fn validate_requirements(&self, _params: &ParamsNames, _data: &Resources) {}
 
 	fn path(&self) -> RoutePath {
 		RoutePath {
@@ -213,7 +213,7 @@ impl Route for StaticFilesRoute {
 		&'a self,
 		req: &'a mut Request,
 		_params: &'a PathParams,
-		_: &'a Data,
+		_: &'a Resources,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		let uri = &self.uri;
 		let caching = self.caching.clone();
@@ -371,7 +371,7 @@ pub struct StaticFileRoute {
 }
 
 impl Route for StaticFileRoute {
-	fn validate_data(&self, _params: &ParamsNames, _data: &Data) {}
+	fn validate_requirements(&self, _params: &ParamsNames, _data: &Resources) {}
 
 	fn path(&self) -> RoutePath {
 		RoutePath {
@@ -384,7 +384,7 @@ impl Route for StaticFileRoute {
 		&'a self,
 		req: &'a mut Request,
 		_params: &'a PathParams,
-		_data: &'a Data,
+		_data: &'a Resources,
 	) -> PinnedFuture<'a, crate::Result<Response>> {
 		PinnedFuture::new(async move {
 			serve_file(&*self.path, &req, self.caching.clone())

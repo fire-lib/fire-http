@@ -1,8 +1,9 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 
-mod data;
-pub use data::Data;
+
+pub mod resources;
+use resources::Resources;
 
 pub mod routes;
 use routes::{Catcher, ParamsNames, RawRoute, Route, Routes};
@@ -64,7 +65,7 @@ pub async fn build(addr: impl ToSocketAddrs) -> Result<FireBuilder> {
 /// `FireBuilder` gathers all materials needed to light a fire (start a server).
 pub struct FireBuilder {
 	addr: SocketAddr,
-	data: Data,
+	resources: Resources,
 	routes: Routes,
 	configs: RequestConfigs,
 }
@@ -81,22 +82,22 @@ impl FireBuilder {
 			.unwrap();
 		Ok(Self {
 			addr,
-			data: Data::new(),
+			resources: Resources::new(),
 			routes: Routes::new(),
 			configs: RequestConfigs::new(),
 		})
 	}
 
 	/// Returns a reference to the current data.
-	pub fn data(&self) -> &Data {
-		&self.data
+	pub fn data(&self) -> &Resources {
+		&self.resources
 	}
 
 	pub fn add_data<D>(&mut self, data: D)
 	where
 		D: Any + Send + Sync,
 	{
-		self.data.insert(data);
+		self.resources.insert(data);
 	}
 
 	/// Adds a `RawRoute` to the fire.
@@ -106,7 +107,7 @@ impl FireBuilder {
 	{
 		let path = route.path();
 		let names = ParamsNames::parse(&path.path);
-		route.validate_data(&names, &self.data);
+		route.validate_requirements(&names, &self.resources);
 		self.routes.push_raw(path, route)
 	}
 
@@ -118,7 +119,7 @@ impl FireBuilder {
 		let route = route.into_route();
 		let path = route.path();
 		let names = ParamsNames::parse(&path.path);
-		route.validate_data(&names, &self.data);
+		route.validate_requirements(&names, &self.resources);
 		self.routes.push(path, route)
 	}
 
@@ -127,7 +128,7 @@ impl FireBuilder {
 	where
 		C: Catcher + 'static,
 	{
-		catcher.validate_data(&self.data);
+		catcher.validate_data(&self.resources);
 		self.routes.push_catcher(catcher)
 	}
 
@@ -153,7 +154,8 @@ impl FireBuilder {
 	/// You need to call ignite on the `Fire` so that it starts handling
 	/// requests.
 	pub async fn build(self) -> Result<Fire> {
-		let wood = Arc::new(Wood::new(self.data, self.routes, self.configs));
+		let wood =
+			Arc::new(Wood::new(self.resources, self.routes, self.configs));
 
 		let server = Server::bind(self.addr, wood.clone()).await?;
 
@@ -184,7 +186,8 @@ impl FireBuilder {
 	/// Creating a `FirePit` might be useful for testing or if you want to
 	/// manually create a server.
 	pub fn into_pit(self) -> FirePit {
-		let wood = Arc::new(Wood::new(self.data, self.routes, self.configs));
+		let wood =
+			Arc::new(Wood::new(self.resources, self.routes, self.configs));
 
 		FirePit { wood }
 	}
@@ -220,7 +223,7 @@ pub struct FirePit {
 }
 
 impl FirePit {
-	pub fn data(&self) -> &Data {
+	pub fn data(&self) -> &Resources {
 		self.wood.data()
 	}
 
