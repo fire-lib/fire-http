@@ -1,8 +1,9 @@
+use fire::impl_res_extractor;
 use fire_api as api;
 
 use std::fmt;
 
-use api::error::{ApiError, Error as ErrorTrait, StatusCode};
+use api::error::{self, Error as ApiError, StatusCode};
 use api::{Method, Request};
 
 use serde::{Deserialize, Serialize};
@@ -13,13 +14,14 @@ pub enum Error {
 	Request(String),
 }
 
-impl ApiError for Error {
-	fn internal<E: ErrorTrait>(e: E) -> Self {
-		Self::Internal(e.to_string())
-	}
-
-	fn request<E: ErrorTrait>(e: E) -> Self {
-		Self::Request(e.to_string())
+impl error::ApiError for Error {
+	fn from_error(e: ApiError) -> Self {
+		match e {
+			ApiError::HeadersMissing(_) | ApiError::Deserialize(_) => {
+				Self::Request(e.to_string())
+			}
+			e => Self::Internal(e.to_string()),
+		}
 	}
 
 	fn status_code(&self) -> StatusCode {
@@ -45,6 +47,8 @@ struct Name {
 	lastname: String,
 }
 
+impl_res_extractor!(Name);
+
 impl Request for NameReq {
 	type Response = Name;
 	type Error = Error;
@@ -54,11 +58,7 @@ impl Request for NameReq {
 }
 
 #[fire::api(NameReq)]
-async fn get_name(
-	_req: NameReq,
-	_some_data: &Name,
-	_more_data: &NameReq,
-) -> Result<Name, Error> {
+async fn get_name(_req: NameReq, _some_data: &Name) -> Result<Name, Error> {
 	Ok(Name {
 		firstname: "Albert".into(),
 		lastname: "Einstein".into(),

@@ -2,7 +2,7 @@ use fire_api as api;
 
 use std::fmt;
 
-use api::error::{ApiError, Error as ErrorTrait, StatusCode};
+use api::error::{self, Error as ApiError, StatusCode};
 use api::stream::{Stream, StreamKind, Streamer};
 
 use serde::{Deserialize, Serialize};
@@ -13,13 +13,14 @@ pub enum Error {
 	Request(String),
 }
 
-impl ApiError for Error {
-	fn internal<E: ErrorTrait>(e: E) -> Self {
-		Self::Internal(e.to_string())
-	}
-
-	fn request<E: ErrorTrait>(e: E) -> Self {
-		Self::Request(e.to_string())
+impl error::ApiError for Error {
+	fn from_error(e: ApiError) -> Self {
+		match e {
+			ApiError::HeadersMissing(_) | ApiError::Deserialize(_) => {
+				Self::Request(e.to_string())
+			}
+			e => Self::Internal(e.to_string()),
+		}
 	}
 
 	fn status_code(&self) -> StatusCode {
@@ -58,8 +59,6 @@ impl Stream for SenderReq {
 async fn lucky_number_stream(
 	req: SenderReq,
 	mut streamer: Streamer<SenderMsg>,
-	_some_data: &SenderMsg,
-	_more_data: &SenderReq,
 ) -> Result<(), Error> {
 	for i in 0..req.count {
 		streamer
