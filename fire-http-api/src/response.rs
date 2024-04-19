@@ -1,5 +1,6 @@
-use fire::header::{
-	values::IntoHeaderName, HeaderValue, HeaderValues, StatusCode,
+use fire::{
+	header::{values::IntoHeaderName, HeaderValue, HeaderValues, StatusCode},
+	state::StateRefCell,
 };
 
 use std::fmt;
@@ -17,6 +18,11 @@ impl ResponseSettings {
 			headers: HeaderValues::new(),
 			status: StatusCode::OK,
 		}
+	}
+
+	#[doc(hidden)]
+	pub fn new_for_state() -> StateRefCell<Self> {
+		StateRefCell::new(Self::new())
 	}
 
 	pub fn headers_mut(&mut self) -> &mut HeaderValues {
