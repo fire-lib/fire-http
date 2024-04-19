@@ -80,11 +80,17 @@ impl RequestBuilder {
 	/// Sets the body from a serialized value
 	#[cfg(feature = "json")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-	pub fn serialize<S: ?Sized>(self, value: &S) -> std::io::Result<Self>
+	pub fn serialize<S: ?Sized>(
+		self,
+		value: &S,
+	) -> Result<Self, super::SerializeError>
 	where
 		S: serde::Serialize,
 	{
-		Ok(self.body(Body::serialize(value)?))
+		Ok(self.body(
+			Body::serialize(value)
+				.map_err(|e| super::SerializeError::Json(e))?,
+		))
 	}
 
 	/// Serializes the value to a query string and appends it to the path.
@@ -96,16 +102,14 @@ impl RequestBuilder {
 	pub fn serialize_query<S: ?Sized>(
 		mut self,
 		value: &S,
-	) -> std::io::Result<Self>
+	) -> Result<Self, super::SerializeError>
 	where
 		S: serde::Serialize,
 	{
-		use std::io;
-
 		let mut parts = self.header.uri.into_parts();
 
 		let query = serde_urlencoded::to_string(&value)
-			.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+			.map_err(|e| super::SerializeError::UrlEncoded(e))?;
 
 		parts.path_and_query = Some(
 			format!(

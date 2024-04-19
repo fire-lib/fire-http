@@ -116,14 +116,15 @@ impl HeaderValues {
 	}
 
 	/// Returns the value percent decoded as a string if it exists and is valid.
-	pub fn decode_value<K>(&self, key: K) -> Option<Cow<'_, str>>
+	pub fn decode_value<K>(
+		&self,
+		key: K,
+	) -> Option<Result<Cow<'_, str>, std::str::Utf8Error>>
 	where
 		K: AsHeaderName,
 	{
-		self.get(key).and_then(|v| {
-			percent_encoding::percent_decode(v.as_bytes())
-				.decode_utf8()
-				.ok()
+		self.get(key).map(|v| {
+			percent_encoding::percent_decode(v.as_bytes()).decode_utf8()
 		})
 	}
 
@@ -131,13 +132,19 @@ impl HeaderValues {
 	/// does not exist or is not valid json.
 	#[cfg(feature = "json")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-	pub fn deserialize_value<K, D>(&self, key: K) -> Option<D>
+	pub fn deserialize_value<K, D>(
+		&self,
+		key: K,
+	) -> Option<Result<D, serde_json::Error>>
 	where
 		K: AsHeaderName,
 		D: serde::de::DeserializeOwned,
 	{
-		let v = self.decode_value(key)?;
-		serde_json::from_str(v.as_ref()).ok()
+		self.get(key).map(|v| {
+			let s = percent_encoding::percent_decode(v.as_bytes())
+				.decode_utf8_lossy();
+			serde_json::from_str(s.as_ref())
+		})
 	}
 
 	/// Returns the inner `HeaderMap`.
@@ -220,7 +227,7 @@ mod tests {
 		let s = values.get_str("Rocket").unwrap();
 		assert_eq!(s, "%F0%9F%9A%80 Rocket");
 
-		let s = values.decode_value("Rocket").unwrap();
+		let s = values.decode_value("Rocket").unwrap().unwrap();
 		assert_eq!(s, "🚀 Rocket");
 	}
 
@@ -243,7 +250,7 @@ mod tests {
 		let s = values.get_str("Value").unwrap();
 		assert_eq!(s, "{\"text\":\"%F0%9F%9A%80 Rocket\",\"number\":42}");
 
-		let n_val: Value = values.deserialize_value("Value").unwrap();
+		let n_val: Value = values.deserialize_value("Value").unwrap().unwrap();
 		assert_eq!(n_val, val);
 	}
 }
