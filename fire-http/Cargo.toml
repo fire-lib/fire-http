@@ -25,8 +25,6 @@ ws = [
 ]
 ## GraphQl is unstable
 graphql = ["json", "dep:juniper"]
-## Trace logging is only enabled with this feature
-trace = []
 
 [[example]]
 name = "catcher"
@@ -95,6 +93,7 @@ codegen = { package = "fire-http-codegen", version = "0.3.0-alpha.1", path = "..
 juniper = { version = "0.15", default-features = false, optional = true }
 matchit = "0.8"
 byte-parser = "0.2"
+thiserror = "1.0.58"
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }

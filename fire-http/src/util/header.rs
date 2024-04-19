@@ -4,10 +4,15 @@ use std::net::SocketAddr;
 
 use hyper::http::uri::{Authority, Scheme};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum HeaderError {
+	#[error("No host header found")]
 	NoHost,
+
+	#[error("Host header is invalid")]
 	HostInvalid,
+
+	#[error("Invalid uri")]
 	Uri,
 }
 

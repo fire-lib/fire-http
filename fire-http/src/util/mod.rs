@@ -71,7 +71,7 @@ pub(crate) fn convert_fire_resp_to_hyper_resp(
 	if !matches!(header.content_type, ContentType::None) {
 		let e = header.values.try_insert(CONTENT_TYPE, header.content_type);
 		if let Err(e) = e {
-			error!("could not insert content type {:?}", e);
+			error!("could not insert content type: {e}");
 		}
 	}
 
@@ -95,13 +95,4 @@ fn validate_content_length(response: &Response) -> Option<()> {
 	assert_eq!(len, body_len);
 
 	Some(())
-}
-
-macro_rules! trace {
-	($($tt:tt)*) => (
-		#[cfg(feature = "trace")]
-		{
-			tracing::trace!($($tt)*);
-		}
-	)
 }

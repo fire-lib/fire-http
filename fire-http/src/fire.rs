@@ -9,7 +9,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use tracing::error;
+use tracing::{debug, debug_span, error, Instrument};
 
 use types::body::BodyHttp;
 use types::header::StatusCode;
@@ -84,20 +84,31 @@ pub(crate) async fn route_hyper(
 	hyper_req: HyperRequest,
 	address: SocketAddr,
 ) -> Result<hyper::Response<BodyHttp>, Infallible> {
-	let route_resp = route_hyper_req(wood, hyper_req, address).await;
+	let span = debug_span!(
+		"req",
+		method = ?hyper_req.method(),
+		uri = ?hyper_req.uri(),
+	);
+
+	let route_resp = async move {
+		let resp = route_hyper_req(wood, hyper_req, address).await;
+		let status_code = resp.header().status_code;
+		debug!(?status_code, "resp");
+
+		resp
+	}
+	.instrument(span)
+	.await;
+
 	let hyper_resp = convert_fire_resp_to_hyper_resp(route_resp);
 	Ok(hyper_resp)
 }
 
-pub(crate) async fn route_hyper_req(
+async fn route_hyper_req(
 	wood: &Wood,
 	mut hyper_req: HyperRequest,
 	address: SocketAddr,
 ) -> Response {
-	// todo use a tracing span
-
-	trace!("Request {} {}", hyper_req.method(), hyper_req.uri());
-
 	// route raw_routes
 	// response is Option<Response>
 	let resp = if let Some((route, params)) = wood
@@ -110,7 +121,7 @@ pub(crate) async fn route_hyper_req(
 		match res {
 			Some(Ok(res)) => Some(res),
 			Some(Err(e)) => {
-				error!("RawRoute returned an error {:?}", e);
+				error!("raw_route error: {}", e);
 				Some(e.status_code().into())
 			}
 			None => None,
@@ -126,7 +137,7 @@ pub(crate) async fn route_hyper_req(
 			if let Some(resp) = resp {
 				return resp;
 			}
-			error!("Could not parse the hyper request {:?}", e);
+			error!("Could not parse the hyper request: {e}");
 			return StatusCode::BAD_REQUEST.into();
 		}
 	};
@@ -138,7 +149,7 @@ pub(crate) async fn route_hyper_req(
 		match route(wood, &mut req).await {
 			Some(Ok(resp)) => resp,
 			Some(Err(e)) => {
-				error!("Route error: {:?} {:?}", req.header().uri().path(), e);
+				error!("route error: {e}");
 				e.status_code().into()
 			}
 			None => StatusCode::NOT_FOUND.into(),
@@ -157,8 +168,6 @@ pub(crate) async fn route_hyper_req(
 			resp = e.status_code().into();
 		}
 	}
-
-	trace!("Response {:?}", resp);
 
 	resp
 }

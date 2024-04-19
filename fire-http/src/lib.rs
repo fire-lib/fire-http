@@ -29,6 +29,7 @@ use server::Server;
 
 mod fire;
 use fire::{RequestConfigs, Wood};
+use tracing::info;
 
 #[cfg(feature = "fs")]
 #[cfg_attr(docsrs, doc(cfg(feature = "fs")))]
@@ -74,7 +75,6 @@ pub struct FireBuilder {
 	resources: Resources,
 	routes: Routes,
 	configs: RequestConfigs,
-	show_startup_msg: bool,
 }
 
 impl FireBuilder {
@@ -92,7 +92,6 @@ impl FireBuilder {
 			resources: Resources::new(),
 			routes: Routes::new(),
 			configs: RequestConfigs::new(),
-			show_startup_msg: true,
 		})
 	}
 
@@ -157,11 +156,6 @@ impl FireBuilder {
 		self.configs.timeout(timeout)
 	}
 
-	/// Prevents the fire from showing a message when the server get's started.
-	pub fn hide_startup_message(&mut self) {
-		self.show_startup_msg = false;
-	}
-
 	/// Binds to the address and prepares to serve requests.
 	///
 	/// You need to call ignite on the `Fire` so that it starts handling
@@ -172,11 +166,7 @@ impl FireBuilder {
 
 		let server = Server::bind(self.addr, wood.clone()).await?;
 
-		Ok(Fire {
-			wood,
-			server,
-			show_startup_msg: self.show_startup_msg,
-		})
+		Ok(Fire { wood, server })
 	}
 
 	/// Ignites the fire, which starts the server.
@@ -214,7 +204,6 @@ impl FireBuilder {
 pub struct Fire {
 	wood: Arc<Wood>,
 	server: Server,
-	show_startup_msg: bool,
 }
 
 impl Fire {
@@ -229,9 +218,7 @@ impl Fire {
 	}
 
 	pub async fn ignite(self) -> Result<()> {
-		if self.show_startup_msg {
-			eprintln!("Running server on addr: {}", self.local_addr().unwrap());
-		}
+		info!("Running server on addr: {}", self.local_addr().unwrap());
 
 		self.server.serve().await
 	}
