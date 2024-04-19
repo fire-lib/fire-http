@@ -1,10 +1,8 @@
 use crate::route::generate_struct;
-use crate::util::{
-	fire_http_crate, ref_type, validate_inputs, validate_signature,
-};
+use crate::util::{fire_http_crate, validate_inputs, validate_signature};
 use crate::Args;
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 use syn::{ItemFn, Result};
 
@@ -14,34 +12,38 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 	validate_signature(&item.sig)?;
 
 	// Box<Type>
-	let inputs = validate_inputs(item.sig.inputs.iter(), false)?;
+	let inputs = validate_inputs(item.sig.inputs.iter())?;
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
+
+	let extractor_type =
+		quote!(#fire::extractor::Extractor<#fire::ws::WebSocket>);
 
 	let valid_data_fn = {
 		let mut asserts = vec![];
 
 		for (name, ty) in &inputs {
-			let valid_fn = match ref_type(&ty) {
-				Some(reff) => {
-					let elem = &reff.elem;
-					quote!(#fire::ws::util::valid_ws_data_as_ref::<#elem>)
-				}
-				None => {
-					quote!(#fire::ws::util::valid_ws_data_as_owned::<#ty>)
-				}
-			};
+			asserts.push(quote!({
+				let validate = #fire::extractor::Validate::new(
+					#name, params, &mut state, resources
+				);
 
-			let error_msg = format!("could not find {}", quote!(#ty));
-
-			asserts.push(quote!(
-				assert!(#valid_fn(#name, params, data), #error_msg);
-			));
+				<#ty as #extractor_type>::validate(
+					validate
+				);
+			}));
 		}
 
 		quote!(
-			fn validate_data(&self, params: &#fire::routes::ParamsNames, data: &#fire::Data) {
+			fn validate_requirements(
+				&self,
+				params: &#fire::routes::ParamsNames,
+				resources: &#fire::resources::Resources
+			) {
+				#[allow(unused_mut, dead_code)]
+				let mut state = #fire::state::StateValidation::new();
+
 				#(#asserts)*
 			}
 		)
@@ -78,22 +80,50 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 
 		let mut handler_args_vars = vec![];
 		let mut handler_args = vec![];
+		let mut prepare_extractors = vec![];
 
 		for (idx, (name, ty)) in inputs.iter().enumerate() {
-			let get_fn = match ref_type(&ty) {
-				Some(reff) => {
-					let elem = &reff.elem;
-					quote!(#fire::ws::util::get_ws_data_as_ref::<#elem>)
-				}
-				None => {
-					quote!(#fire::ws::util::get_ws_data_as_owned::<#ty>)
-				}
-			};
+			prepare_extractors.push(quote!({
+				let prepare = #fire::extractor::Prepare::new(
+					#name, &header, &params, &mut state, &resources
+				);
 
+				let res = <#ty as #extractor_type>::prepare(
+					prepare
+				).await;
+
+				match res {
+					Ok(res) => res,
+					Err(e) => {
+						return Some(Err(#fire::Error::new(
+							#fire::extractor::ExtractorError::error_kind(&e),
+							#fire::extractor::ExtractorError::into_std(e)
+						)));
+					}
+				}
+			}));
+
+			let i = Literal::usize_unsuffixed(idx + 1);
 			let var_name = format_ident!("handler_arg_{idx}");
 
 			handler_args_vars.push(quote!(
-				let #var_name = #get_fn(#name, &ws, &params, &data);
+				let #var_name = {
+					let extract = #fire::extractor::Extract::new(
+						prepared.#i, #name, &mut ws, &params, &state, &resources
+					);
+
+					let res = <#ty as #extractor_type>::extract(
+						extract
+					);
+
+					match res {
+						Ok(res) => res,
+						Err(err) => {
+							#fire::ws::util::log_extractor_error(err);
+							return
+						}
+					}
+				};
 			));
 			handler_args.push(quote!(#var_name));
 		}
@@ -102,8 +132,9 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 			fn call<'a>(
 				&'a self,
 				req: &'a mut #fire::routes::HyperRequest,
+				address: std::net::SocketAddr,
 				params: &'a #fire::routes::PathParams,
-				data: &'a #fire::Data
+				resources: &'a #fire::resources::Resources
 			) -> #fire::util::PinnedFuture<'a,
 				Option<#fire::Result<#fire::Response>>
 			> {
@@ -116,8 +147,21 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 						Err(e) => return Some(Err(e))
 					};
 
-					let data = data.clone();
+					let header = #fire::ws::util::hyper_req_to_header(req, address);
+					let header = match header {
+						Ok(h) => h,
+						Err(e) => return Some(Err(e))
+					};
+
+					let resources = resources.clone();
 					let params = params.clone();
+
+					#[allow(unused_mut, dead_code)]
+					let mut state = #fire::state::State::new();
+					// prepare extractions
+					let prepared = (0,// this is a placeholder
+						#(#prepare_extractors),*
+					);
 
 					#fire::ws::util::spawn(async move {
 						match on_upgrade.await {
@@ -125,7 +169,7 @@ pub(crate) fn expand(args: Args, item: ItemFn) -> Result<TokenStream> {
 								let ws = #fire::ws::WebSocket::new(
 									upgraded
 								).await;
-								let ws = #fire::ws::util::DataManager::new(ws);
+								let mut ws = Some(ws);
 
 								#(#handler_args_vars)*
 

@@ -1,10 +1,12 @@
 use codegen::ws;
 use fire_http_codegen as codegen;
 
-use fire::ws::WebSocket;
+use fire::{impl_res_extractor, ws::WebSocket};
 
 #[derive(Debug, Clone)]
 struct SomeStruct;
+
+impl_res_extractor!(SomeStruct);
 
 #[ws("/ws")]
 async fn handler(_ws: WebSocket, _other: &SomeStruct) -> () {

@@ -1,17 +1,10 @@
-use crate::util::{fire_http_crate, validate_signature};
+use crate::util::{fire_http_crate, validate_inputs, validate_signature};
 use crate::Args;
 use crate::{Method, TransformOutput};
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
-use syn::{Error, FnArg, ItemFn, Pat, Result, Type};
-
-fn name_from_pattern(pat: &Pat) -> Option<String> {
-	match pat {
-		Pat::Ident(ident) => Some(ident.ident.to_string()),
-		_ => None,
-	}
-}
+use syn::{ItemFn, Result};
 
 pub(crate) fn expand(
 	args: Args,
@@ -28,35 +21,10 @@ pub(crate) fn expand(
 
 	// (is_mut, ty)
 	// TypeReference
-	let mut inputs = vec![];
+	let inputs = validate_inputs(item.sig.inputs.iter())?;
 
-	for fn_arg in item.sig.inputs.iter() {
-		let (name, ty) = match fn_arg {
-			FnArg::Receiver(r) => {
-				return Err(Error::new_spanned(r, "self not allowed"))
-			}
-			FnArg::Typed(t) => {
-				(name_from_pattern(&t.pat).unwrap_or_else(String::new), &t.ty)
-			}
-		};
-
-		let reff = match &**ty {
-			Type::Reference(r) => r,
-			_ => {
-				return Err(Error::new_spanned(
-					ty,
-					"route argument needs to be \
-				a reference",
-				))
-			}
-		};
-
-		if let Some(lifetime) = &reff.lifetime {
-			return Err(Error::new_spanned(lifetime, "lifetimes not allowed"));
-		}
-
-		inputs.push((name, reff));
-	}
+	let extractor_type =
+		quote!(#fire::extractor::Extractor<&mut #fire::Request>);
 
 	let struct_name = &item.sig.ident;
 	let struct_gen = generate_struct(&item);
@@ -65,23 +33,26 @@ pub(crate) fn expand(
 		let mut asserts = vec![];
 
 		for (name, ty) in &inputs {
-			let elem = &ty.elem;
-			let valid_fn = if ty.mutability.is_some() {
-				quote!(#fire::routes::util::valid_route_data_as_mut)
-			} else {
-				quote!(#fire::routes::util::valid_route_data_as_ref)
-			};
+			asserts.push(quote!({
+				let validate = #fire::extractor::Validate::new(
+					#name, params, &mut state, resources
+				);
 
-			let error_msg =
-				format!("could not find {}: {}", name, quote!(#elem));
-
-			asserts.push(quote!(
-				assert!(#valid_fn::<#elem>(#name, params, data), #error_msg);
-			));
+				<#ty as #extractor_type>::validate(
+					validate
+				);
+			}));
 		}
 
 		quote!(
-			fn validate_data(&self, params: &#fire::routes::ParamsNames, data: &#fire::Data) {
+			fn validate_requirements(
+				&self,
+				params: &#fire::routes::ParamsNames,
+				resources: &#fire::resources::Resources
+			) {
+				#[allow(unused_mut, dead_code)]
+				let mut state = #fire::state::StateValidation::new();
+
 				#(#asserts)*
 			}
 		)
@@ -122,18 +93,48 @@ pub(crate) fn expand(
 		};
 
 		let mut call_route_args = vec![];
+		let mut prepare_extractors = vec![];
 
-		for (name, ty) in &inputs {
-			let elem = &ty.elem;
-			let get_fn = if ty.mutability.is_some() {
-				quote!(#fire::routes::util::get_route_data_as_mut)
-			} else {
-				quote!(#fire::routes::util::get_route_data_as_ref)
-			};
+		for (i, (name, ty)) in inputs.iter().enumerate() {
+			prepare_extractors.push(quote!({
+				let prepare = #fire::extractor::Prepare::new(
+					#name, req.header(), params, &mut state, resources
+				);
 
-			call_route_args.push(quote!(
-				#get_fn::<#elem>(#name, &mut req, params, data)
-			));
+				let res = <#ty as #extractor_type>::prepare(
+					prepare
+				).await;
+
+				match res {
+					Ok(res) => res,
+					Err(e) => {
+						return Err(#fire::Error::new(
+							#fire::extractor::ExtractorError::error_kind(&e),
+							#fire::extractor::ExtractorError::into_std(e)
+						));
+					}
+				}
+			}));
+
+			let i = Literal::usize_unsuffixed(i + 1);
+
+			call_route_args.push(quote!({
+				let extract = #fire::extractor::Extract::new(
+					prepared.#i, #name, &mut req, params, &state, resources
+				);
+
+				let res = <#ty as #extractor_type>::extract(
+					extract
+				);
+
+				match res {
+					Ok(res) => res,
+					Err(err) => return Err(#fire::Error::new(
+						#fire::extractor::ExtractorError::error_kind(&err),
+						#fire::extractor::ExtractorError::into_std(err)
+					))
+				}
+			}));
 		}
 
 		let process_ret_ty = match output {
@@ -149,13 +150,22 @@ pub(crate) fn expand(
 		quote!(
 			fn call<'a>(
 				&'a self,
-				req: &'a mut #fire::Request,
+				#[allow(unused_mut)]
+				mut req: &'a mut #fire::Request,
 				params: &'a #fire::routes::PathParams,
-				data: &'a #fire::Data
+				resources: &'a #fire::resources::Resources
 			) -> #fire::util::PinnedFuture<'a, #fire::Result<#fire::Response>> {
 				#route_fn
 
 				#fire::util::PinnedFuture::new(async move {
+					#[allow(unused_mut, dead_code)]
+					let mut state = #fire::state::State::new();
+
+					// prepare extractions
+					let prepared = (0,// this is a placeholder
+						#(#prepare_extractors),*
+					);
+
 					let mut req = Some(req);
 
 					let ret = handle_route(
