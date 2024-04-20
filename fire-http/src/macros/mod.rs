@@ -23,6 +23,24 @@ macro_rules! impl_res_extractor {
 }
 
 #[macro_export]
+macro_rules! impl_req_extractor {
+	($ty:ty) => {
+		impl<'a> $crate::extractor::Extractor<'a, $ty> for $ty {
+			type Error = std::convert::Infallible;
+			type Prepared = ();
+
+			$crate::extractor_validate!();
+
+			$crate::extractor_prepare!();
+
+			$crate::extractor_extract!(<$ty> |extract| {
+				Ok(extract.request.take().unwrap())
+			});
+		}
+	};
+}
+
+#[macro_export]
 macro_rules! extractor_validate {
 	() => {
 		$crate::extractor_validate!(|_validate| {});

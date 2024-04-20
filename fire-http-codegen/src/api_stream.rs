@@ -24,35 +24,39 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 	validate_signature(&item.sig)?;
 
 	// implement Extractor for req_ty
-	let impl_extractor = quote!(
-		impl<'a> #fire::extractor::Extractor<'a, #stream_ty> for #stream_ty {
-			type Error = std::convert::Infallible;
-			type Prepared = ();
+	let impl_extractor = if !args.impl_extractor {
+		quote!()
+	} else {
+		quote!(
+			impl<'a> #fire::extractor::Extractor<'a, #stream_ty> for #stream_ty {
+				type Error = std::convert::Infallible;
+				type Prepared = ();
 
-			fn validate(_validate: #fire::extractor::Validate<'_>) {}
+				fn validate(_validate: #fire::extractor::Validate<'_>) {}
 
-			fn prepare(
-				_prepare: #fire::extractor::Prepare<'_>,
-			) -> std::pin::Pin<
-				Box<
-					dyn std::future::Future<
-						Output = std::result::Result<Self::Prepared, Self::Error>,
-					> + Send,
-				>,
-			> {
-				Box::pin(async move { Ok(()) })
+				fn prepare(
+					_prepare: #fire::extractor::Prepare<'_>,
+				) -> std::pin::Pin<
+					Box<
+						dyn std::future::Future<
+							Output = std::result::Result<Self::Prepared, Self::Error>,
+						> + Send,
+					>,
+				> {
+					Box::pin(async move { Ok(()) })
+				}
+
+				fn extract(
+					extract: #fire::extractor::Extract<'a, '_, Self::Prepared, #stream_ty>,
+				) -> std::result::Result<Self, Self::Error>
+				where
+					Self: Sized,
+				{
+					Ok(extract.request.take().unwrap())
+				}
 			}
-
-			fn extract(
-				extract: #fire::extractor::Extract<'a, '_, Self::Prepared, #stream_ty>,
-			) -> std::result::Result<Self, Self::Error>
-			where
-				Self: Sized,
-			{
-				Ok(extract.request.take().unwrap())
-			}
-		}
-	);
+		)
+	};
 
 	// Box<Type>
 	let inputs = validate_inputs(item.sig.inputs.iter())?;
