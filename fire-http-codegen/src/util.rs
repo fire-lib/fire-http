@@ -105,3 +105,21 @@ pub(crate) fn fire_api_crate() -> Result<TokenStream> {
 		}
 	})
 }
+
+#[cfg(feature = "api")]
+pub(crate) fn fire_http_crate_from_any() -> Result<TokenStream> {
+	let err = match fire_http_crate() {
+		Ok(ok) => return Ok(ok),
+		Err(err) => err,
+	};
+
+	match fire_api_crate() {
+		Ok(ok) => Ok(quote!(#ok::fire)),
+		Err(_) => Err(err),
+	}
+}
+
+#[cfg(not(feature = "api"))]
+pub(crate) fn fire_http_crate_from_any() -> Result<TokenStream> {
+	fire_http_crate()
+}

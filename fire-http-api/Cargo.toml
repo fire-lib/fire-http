@@ -1,7 +1,7 @@
 [package]
 name = "fire-http-api"
 description = "Make web apis"
-version = "0.4.0-alpha.5"
+version = "0.4.0-alpha.6"
 authors = ["Sören Meier <info@soerenmeier.ch>"]
 repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"

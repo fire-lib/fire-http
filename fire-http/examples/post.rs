@@ -2,10 +2,11 @@ use fire_http as fire;
 
 use fire::extractor::Res;
 use fire::header::Mime;
-use fire::{get, post, Error, Request, Response, Result};
+use fire::{get, post, Error, Request, Resource, Response, Result};
 
 use std::sync::Mutex;
 
+#[derive(Resource)]
 struct LastPost(Mutex<String>);
 
 #[get("/")]
@@ -32,7 +33,7 @@ fn hello_world(last_post: Res<LastPost>) -> Response {
 #[post("/")]
 async fn hello_world_post(
 	req: &mut Request,
-	last_post: Res<'_, LastPost>,
+	last_post: &LastPost,
 ) -> Result<String> {
 	// we need to update the size limit
 	req.set_size_limit(Some(256));

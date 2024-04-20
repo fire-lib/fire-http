@@ -23,4 +23,4 @@ pub use serde_json;
 
 #[cfg(feature = "stream")]
 pub use codegen::api_stream;
-pub use codegen::{api, RequestExtractor};
+pub use codegen::{api, RequestExtractor, Resource};
