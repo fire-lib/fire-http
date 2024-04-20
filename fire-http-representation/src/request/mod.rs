@@ -109,6 +109,7 @@ mod serde_error {
 		WrongMimeType(Mime),
 		#[cfg(feature = "json")]
 		Json(serde_json::Error),
+		#[cfg(feature = "query")]
 		UrlEncoded(serde::de::value::Error),
 	}
 
@@ -125,6 +126,7 @@ mod serde_error {
 	pub enum SerializeError {
 		#[cfg(feature = "json")]
 		Json(serde_json::Error),
+		#[cfg(feature = "query")]
 		UrlEncoded(serde_urlencoded::ser::Error),
 	}
 
@@ -137,7 +139,7 @@ mod serde_error {
 	impl std::error::Error for SerializeError {}
 }
 
-#[cfg(feature = "json")]
+#[cfg(any(feature = "json", feature = "query"))]
 pub use serde_error::*;
 
 #[cfg(test)]
