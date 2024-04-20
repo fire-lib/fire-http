@@ -21,6 +21,6 @@ pub use fire;
 #[doc(hidden)]
 pub use serde_json;
 
-pub use codegen::api;
 #[cfg(feature = "stream")]
 pub use codegen::api_stream;
+pub use codegen::{api, RequestExtractor};

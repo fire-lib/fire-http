@@ -3,6 +3,8 @@ mod api;
 #[cfg(all(feature = "api", feature = "stream"))]
 mod api_stream;
 mod args;
+#[cfg(feature = "api")]
+mod request_extractor;
 mod route;
 mod util;
 #[cfg(feature = "ws")]
@@ -124,4 +126,12 @@ pub fn api_stream(attrs: TokenStream, item: TokenStream) -> TokenStream {
 	stream
 		.map(|stream| stream.into())
 		.unwrap_or_else(to_compile_error)
+}
+
+#[proc_macro_derive(RequestExtractor)]
+#[cfg(feature = "api")]
+pub fn derive_request_extractor(input: TokenStream) -> TokenStream {
+	let input = parse_macro_input!(input as syn::DeriveInput);
+
+	request_extractor::expand(&input).unwrap_or_else(to_compile_error)
 }

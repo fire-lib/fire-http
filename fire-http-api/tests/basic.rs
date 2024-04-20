@@ -1,5 +1,5 @@
 use fire::extractor::PathParam;
-use fire::impl_req_extractor;
+use fire::RequestExtractor;
 use fire_http_api as fire_api;
 
 use fire_api::error::{self, Error as ApiError, StatusCode};
@@ -67,14 +67,12 @@ async fn test(r: TestReq) -> Result<TestResp, Error> {
 	Ok(TestResp { ho: r.hi })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// manually implement Extractor
+#[derive(Debug, Clone, Serialize, Deserialize, RequestExtractor)]
 #[serde(rename_all = "camelCase")]
 pub struct UserReq {
 	image_size: Option<u32>,
 }
-
-// manually implement Extractor
-impl_req_extractor!(UserReq);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
