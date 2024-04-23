@@ -9,7 +9,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use tracing::{error, info, info_span, Instrument};
+use tracing::{error, info, info_span, warn, Instrument};
 
 use types::body::BodyHttp;
 use types::header::StatusCode;
@@ -79,7 +79,33 @@ impl Wood {
 	}
 }
 
+#[cfg(feature = "sentry")]
 pub(crate) async fn route_hyper(
+	wood: &Wood,
+	hyper_req: HyperRequest,
+	address: SocketAddr,
+) -> Result<hyper::Response<BodyHttp>, Infallible> {
+	use std::sync::Arc;
+
+	use sentry_core::{Hub, Scope, SentryFutureExt};
+
+	let hub = Hub::new(Hub::current().client(), Arc::new(Scope::default()));
+
+	route_hyper_with_span(wood, hyper_req, address)
+		.bind_hub(hub)
+		.await
+}
+
+#[cfg(not(feature = "sentry"))]
+pub(crate) async fn route_hyper(
+	wood: &Wood,
+	hyper_req: HyperRequest,
+	address: SocketAddr,
+) -> Result<hyper::Response<BodyHttp>, Infallible> {
+	route_hyper_with_span(wood, hyper_req, address).await
+}
+
+async fn route_hyper_with_span(
 	wood: &Wood,
 	hyper_req: HyperRequest,
 	address: SocketAddr,
@@ -90,17 +116,32 @@ pub(crate) async fn route_hyper(
 		uri = ?hyper_req.uri(),
 	);
 
-	let route_resp = async move {
-		let resp = route_hyper_req(wood, hyper_req, address).await;
-		let status_code = resp.header().status_code;
-		info!(?status_code, "resp");
+	route_hyper_inner(wood, hyper_req, address)
+		.instrument(span)
+		.await
+}
 
-		resp
+async fn route_hyper_inner(
+	wood: &Wood,
+	hyper_req: HyperRequest,
+	address: SocketAddr,
+) -> Result<hyper::Response<BodyHttp>, Infallible> {
+	let method = hyper_req.method().clone();
+	let uri = hyper_req.uri().clone();
+	info!(?method, ?uri, "req");
+	let resp = route_hyper_req(wood, hyper_req, address).await;
+	let status_code = resp.header().status_code;
+
+	if status_code.is_server_error() {
+		error!(?status_code, "{method} {uri} | {status_code}");
+	} else if status_code.is_client_error() {
+		warn!(?status_code, "{method} {uri} | {status_code}");
+	} else {
+		info!(?status_code, "{method} {uri} | {status_code}");
 	}
-	.instrument(span)
-	.await;
 
-	let hyper_resp = convert_fire_resp_to_hyper_resp(route_resp);
+	let hyper_resp = convert_fire_resp_to_hyper_resp(resp);
+
 	Ok(hyper_resp)
 }
 
@@ -148,9 +189,9 @@ async fn route_hyper_req(
 	} else {
 		match route(wood, &mut req).await {
 			Some(Ok(resp)) => resp,
-			Some(Err(e)) => {
-				error!("route error: {e}");
-				e.status_code().into()
+			Some(Err(error)) => {
+				error!(?error, "route error");
+				error.status_code().into()
 			}
 			None => StatusCode::NOT_FOUND.into(),
 		}

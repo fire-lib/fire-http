@@ -13,7 +13,7 @@ use std::task::Poll;
 use tokio::sync::mpsc;
 use tokio::time::{interval, Duration};
 
-use tracing::error;
+use tracing::{error, trace};
 
 use fire::header::{Method, RequestHeader};
 use fire::routes::{

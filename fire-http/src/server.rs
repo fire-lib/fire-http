@@ -61,7 +61,7 @@ impl Server {
 					.serve_connection_with_upgrades(io, service)
 					.await
 				{
-					tracing::error!("Error serving connection: {:?}", err);
+					tracing::error!(error = ?err, "Error serving connection: {err}");
 				}
 			});
 		}

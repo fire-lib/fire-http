@@ -7,11 +7,11 @@ use std::time::Duration;
 
 use fire::extractor::ExtractorError;
 use representation::request::SerializeError;
-use tracing::error;
 
 use fire::error::ServerErrorKind;
 use fire::header::{HeaderValues, Method, Mime};
 use fire::{Body, Response};
+use tracing::info;
 
 pub fn setup_request<R: Request>(
 	req: &mut fire::Request,
@@ -63,7 +63,8 @@ pub fn transform_body_to_response<R: Request>(
 	let (status, headers, body) = match res {
 		Ok((settings, body)) => (settings.status, settings.headers, body),
 		Err(e) => {
-			error!("request handle error: {:?}", e);
+			info!(error = ?e, "api response error");
+			// status code should define the error and this should referenced to it
 
 			let body = Body::serialize(&e).map_err(|e| {
 				fire::Error::new(ServerErrorKind::InternalServerError, e)
@@ -80,14 +81,4 @@ pub fn transform_body_to_response<R: Request>(
 	*resp.values_mut() = headers;
 
 	Ok(resp.build())
-}
-
-#[allow(unused)]
-macro_rules! trace {
-	($($tt:tt)*) => (
-		#[cfg(feature = "trace")]
-		{
-			tracing::trace!($($tt)*);
-		}
-	)
 }
