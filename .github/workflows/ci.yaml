@@ -42,7 +42,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
       - run: cargo test --no-default-features
 
-  test_all_features:
+  test_msrv_features:
     name: Test All features
     runs-on: ubuntu-latest
     strategy:
@@ -51,6 +51,21 @@ jobs:
           - stable
           - nightly
           - 1.69.0
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - run: cargo test --features "json,fs,http1,http2,ws"
+
+  test_all_features:
+    name: Test All features
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
