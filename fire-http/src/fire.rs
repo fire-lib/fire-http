@@ -9,7 +9,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use tracing::{debug, debug_span, error, Instrument};
+use tracing::{error, info, info_span, Instrument};
 
 use types::body::BodyHttp;
 use types::header::StatusCode;
@@ -84,7 +84,7 @@ pub(crate) async fn route_hyper(
 	hyper_req: HyperRequest,
 	address: SocketAddr,
 ) -> Result<hyper::Response<BodyHttp>, Infallible> {
-	let span = debug_span!(
+	let span = info_span!(
 		"req",
 		method = ?hyper_req.method(),
 		uri = ?hyper_req.uri(),
@@ -93,7 +93,7 @@ pub(crate) async fn route_hyper(
 	let route_resp = async move {
 		let resp = route_hyper_req(wood, hyper_req, address).await;
 		let status_code = resp.header().status_code;
-		debug!(?status_code, "resp");
+		info!(?status_code, "resp");
 
 		resp
 	}

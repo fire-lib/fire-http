@@ -230,8 +230,6 @@ impl Route for StaticFilesRoute {
 			// build full pathbuf
 			let path_buf = Path::new(&*self.path).join(path_buf);
 
-			tracing::info!("trying to serve {:?}", path_buf);
-
 			serve_file(path_buf, &req, caching)
 				.await
 				.map_err(Error::from_client_io)
