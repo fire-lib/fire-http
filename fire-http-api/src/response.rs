@@ -1,9 +1,11 @@
 use fire::{
+	extractor::Extractor,
+	extractor_extract, extractor_prepare, extractor_validate,
 	header::{values::IntoHeaderName, HeaderValue, HeaderValues, StatusCode},
 	state::StateRefCell,
 };
 
-use std::fmt;
+use std::{convert::Infallible, fmt};
 
 #[derive(Debug, Clone)]
 pub struct ResponseSettings {
@@ -51,4 +53,26 @@ impl ResponseSettings {
 		self.status = status;
 		self
 	}
+}
+
+impl<'a, R> Extractor<'a, R> for &'a mut ResponseSettings {
+	type Error = Infallible;
+	type Prepared = ();
+
+	extractor_validate!(|validate| {
+		assert!(
+			validate.state.validate::<StateRefCell<ResponseSettings>>(),
+			"ResponseSettings not in state"
+		);
+	});
+
+	extractor_prepare!();
+
+	extractor_extract!(|extract| {
+		Ok(extract
+			.state
+			.get::<StateRefCell<ResponseSettings>>()
+			.unwrap()
+			.get_mut())
+	});
 }
