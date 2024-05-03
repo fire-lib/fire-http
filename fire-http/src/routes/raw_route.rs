@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use crate::util::PinnedFuture;
 use crate::{Resources, Response};
 
-pub use crate::server::HyperRequest;
+pub use crate::server::{HyperBody, HyperRequest};
 
 use super::{ParamsNames, PathParams, RoutePath};
 

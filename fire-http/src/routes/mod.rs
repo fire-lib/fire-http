@@ -1,5 +1,5 @@
 mod raw_route;
-pub use raw_route::{HyperRequest, RawRoute};
+pub use raw_route::{HyperBody, HyperRequest, RawRoute};
 
 mod route;
 pub use route::{Route, RoutePath};

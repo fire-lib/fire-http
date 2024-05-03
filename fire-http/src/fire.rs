@@ -1,5 +1,5 @@
 use crate::routes::Routes;
-use crate::server::HyperRequest;
+use crate::server::HyperBody;
 use crate::util::{
 	convert_fire_resp_to_hyper_resp, convert_hyper_req_to_fire_req,
 };
@@ -9,6 +9,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use hyper::body::Incoming;
 use tracing::{error, info, info_span, warn, Instrument};
 
 use types::body::BodyHttp;
@@ -82,7 +83,7 @@ impl Wood {
 #[cfg(feature = "sentry")]
 pub(crate) async fn route_hyper(
 	wood: &Wood,
-	hyper_req: HyperRequest,
+	hyper_req: hyper::Request<Incoming>,
 	address: SocketAddr,
 ) -> Result<hyper::Response<BodyHttp>, Infallible> {
 	use std::sync::Arc;
@@ -99,7 +100,7 @@ pub(crate) async fn route_hyper(
 #[cfg(not(feature = "sentry"))]
 pub(crate) async fn route_hyper(
 	wood: &Wood,
-	hyper_req: HyperRequest,
+	hyper_req: hyper::Request<Incoming>,
 	address: SocketAddr,
 ) -> Result<hyper::Response<BodyHttp>, Infallible> {
 	route_hyper_with_span(wood, hyper_req, address).await
@@ -107,7 +108,7 @@ pub(crate) async fn route_hyper(
 
 async fn route_hyper_with_span(
 	wood: &Wood,
-	hyper_req: HyperRequest,
+	hyper_req: hyper::Request<Incoming>,
 	address: SocketAddr,
 ) -> Result<hyper::Response<BodyHttp>, Infallible> {
 	let span = info_span!(
@@ -123,7 +124,7 @@ async fn route_hyper_with_span(
 
 async fn route_hyper_inner(
 	wood: &Wood,
-	hyper_req: HyperRequest,
+	hyper_req: hyper::Request<Incoming>,
 	address: SocketAddr,
 ) -> Result<hyper::Response<BodyHttp>, Infallible> {
 	let method = hyper_req.method().clone();
@@ -147,9 +148,11 @@ async fn route_hyper_inner(
 
 async fn route_hyper_req(
 	wood: &Wood,
-	mut hyper_req: HyperRequest,
+	hyper_req: hyper::Request<Incoming>,
 	address: SocketAddr,
 ) -> Response {
+	let mut hyper_req = hyper_req.map(HyperBody::from);
+
 	// route raw_routes
 	// response is Option<Response>
 	let resp = if let Some((route, params)) = wood

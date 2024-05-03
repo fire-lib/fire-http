@@ -49,7 +49,7 @@ pub(crate) fn convert_hyper_req_to_fire_req(
 ) -> Result<Request, HeaderError> {
 	let (parts, body) = hyper_req.into_parts();
 
-	let mut body = Body::from_hyper(body);
+	let mut body = Body::from(body);
 	body.set_size_limit(Some(configs.size_limit));
 	body.set_timeout(Some(configs.timeout));
 
