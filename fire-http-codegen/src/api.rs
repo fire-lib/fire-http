@@ -70,6 +70,8 @@ pub(crate) fn expand(args: ApiArgs, item: ItemFn) -> Result<TokenStream> {
 				>>();
 
 				#(#asserts)*
+
+				#fire_api::util::validate_request::<#req_ty>(stringify!(#req_ty));
 			}
 		)
 	};

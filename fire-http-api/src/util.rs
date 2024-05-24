@@ -82,3 +82,19 @@ pub fn transform_body_to_response<R: Request>(
 
 	Ok(resp.build())
 }
+
+pub fn validate_request<R: Request>(ty: &str) {
+	// if it is a get request, make sure the type cannot be parsed from a a null value
+	// since that would mean no request can go through
+	if R::METHOD != Method::GET {
+		return;
+	}
+
+	let r = serde_json::from_value::<R>(serde_json::Value::Null);
+	if r.is_ok() {
+		panic!(
+			"Get request cannot be parsed from a null value, \
+		make sure the type {ty} is not a unit struct"
+		);
+	}
+}

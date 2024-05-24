@@ -154,3 +154,35 @@ async fn test_user() {
 		}
 	);
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoResp {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestGetErrorReq;
+
+impl Request for TestGetErrorReq {
+	type Response = NoResp;
+	type Error = Error;
+
+	const PATH: &'static str = "/test1";
+	const METHOD: Method = Method::GET;
+}
+
+#[api(TestGetErrorReq)]
+async fn test_get_error() -> Result<NoResp, Error> {
+	Ok(NoResp {})
+}
+
+#[traced_test]
+#[tokio::test]
+#[should_panic]
+async fn test_get() {
+	let mut server = fire::build("127.0.0.1:0").await.unwrap();
+
+	server.add_route(test_get_error);
+
+	let _ = server.build().await.unwrap();
+}
