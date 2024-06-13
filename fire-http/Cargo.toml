@@ -7,7 +7,7 @@ repository = "https://github.com/fire-lib/fire-http"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 categories = ["web-programming"]
-rust-version = "1.69"
+rust-version = "1.74"
 
 [features]
 default = ["http1"]
@@ -86,16 +86,16 @@ tokio = { version = "1.0", features = ["net"] }
 percent-encoding = { version = "2.1", optional = true }
 rand = { version = "0.8", optional = true }
 tracing = { version = "0.1" }
-tokio-tungstenite = { version = "0.21", default-features = false, optional = true }
+tokio-tungstenite = { version = "0.23", default-features = false, optional = true }
 futures-util = { version = "0.3.5", default-features = false, optional = true }
 base64 = { version = "0.22", optional = true }
 sha-1 = { version = "0.10", optional = true }
 codegen = { package = "fire-http-codegen", version = "0.3.0-alpha.4", path = "../fire-http-codegen" }
-juniper = { version = "0.15", default-features = false, optional = true }
+juniper = { version = "0.16", default-features = false, optional = true }
 matchit = "0.8"
 byte-parser = "0.2"
 thiserror = "1.0.58"
-sentry-core = { version = "0.32", features = ["client"], optional = true }
+sentry-core = { version = "0.34", features = ["client"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
