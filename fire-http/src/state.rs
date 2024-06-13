@@ -49,6 +49,12 @@ impl State {
 	}
 }
 
+impl Default for State {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 pub struct StateValidation {
 	inner: HashSet<TypeId>,
 }
@@ -79,6 +85,12 @@ impl StateValidation {
 		T: Any + Send,
 	{
 		self.inner.contains(&TypeId::of::<T>())
+	}
+}
+
+impl Default for StateValidation {
+	fn default() -> Self {
+		Self::new()
 	}
 }
 
@@ -131,6 +143,7 @@ impl<T> StateRefCell<T> {
 
 	/// ## Panics
 	/// Panics if the value is currently borrowed.
+	#[allow(clippy::mut_from_ref)]
 	pub fn get_mut(&self) -> &mut T {
 		let r = self.inner.borrow_mut();
 		let mut r = ManuallyDrop::new(r);

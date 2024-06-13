@@ -99,7 +99,7 @@ impl TestResponse {
 			.inner
 			.headers()
 			.get(key)
-			.expect(&format!("header with key {:?} not found", key))
+			.unwrap_or_else(|| panic!("header with key {:?} not found", key))
 			.to_str()
 			.expect("header does not only contain visible ASCII chars");
 		assert_eq!(v, value.as_ref(), "value does not match");

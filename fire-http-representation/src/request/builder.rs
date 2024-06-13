@@ -80,17 +80,12 @@ impl RequestBuilder {
 	/// Sets the body from a serialized value
 	#[cfg(feature = "json")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-	pub fn serialize<S: ?Sized>(
-		self,
-		value: &S,
-	) -> Result<Self, super::SerializeError>
+	pub fn serialize<S>(self, value: &S) -> Result<Self, super::SerializeError>
 	where
-		S: serde::Serialize,
+		S: serde::Serialize + ?Sized,
 	{
-		Ok(self.body(
-			Body::serialize(value)
-				.map_err(|e| super::SerializeError::Json(e))?,
-		))
+		Ok(self
+			.body(Body::serialize(value).map_err(super::SerializeError::Json)?))
 	}
 
 	/// Serializes the value to a query string and appends it to the path.
@@ -99,17 +94,17 @@ impl RequestBuilder {
 	/// This replaces the previous query.
 	#[cfg(feature = "query")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "query")))]
-	pub fn serialize_query<S: ?Sized>(
+	pub fn serialize_query<S>(
 		mut self,
 		value: &S,
 	) -> Result<Self, super::SerializeError>
 	where
-		S: serde::Serialize,
+		S: serde::Serialize + ?Sized,
 	{
 		let mut parts = self.header.uri.into_parts();
 
-		let query = serde_urlencoded::to_string(&value)
-			.map_err(|e| super::SerializeError::UrlEncoded(e))?;
+		let query = serde_urlencoded::to_string(value)
+			.map_err(super::SerializeError::UrlEncoded)?;
 
 		parts.path_and_query = Some(
 			format!(

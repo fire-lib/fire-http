@@ -139,9 +139,9 @@ impl Body {
 	/// Creates a new Body from a serializeable object.
 	#[cfg(feature = "json")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-	pub fn serialize<S: ?Sized>(value: &S) -> Result<Self, serde_json::Error>
+	pub fn serialize<S>(value: &S) -> Result<Self, serde_json::Error>
 	where
-		S: serde::Serialize,
+		S: serde::Serialize + ?Sized,
 	{
 		serde_json::to_vec(value).map(|v| v.into())
 	}

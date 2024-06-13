@@ -44,7 +44,7 @@ mod api {
 				let _eq = input.parse::<Token![=]>()?;
 				let value = input.parse::<LitBool>()?;
 
-				if ident.to_string() != "impl_extractor" {
+				if ident != "impl_extractor" {
 					return Err(input.error("expected `impl_extractor`"));
 				}
 

@@ -59,7 +59,7 @@ impl ContentType {
 	pub fn as_str(&self) -> &str {
 		match self {
 			Self::Known(m) => m.0.as_str_with_maybe_charset(),
-			Self::Unknown(s) => &s,
+			Self::Unknown(s) => s,
 			Self::None => "",
 		}
 	}

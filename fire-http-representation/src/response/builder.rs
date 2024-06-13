@@ -79,3 +79,9 @@ impl ResponseBuilder {
 		Response::new(self.header, self.body)
 	}
 }
+
+impl Default for ResponseBuilder {
+	fn default() -> Self {
+		Self::new()
+	}
+}

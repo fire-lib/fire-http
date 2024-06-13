@@ -24,7 +24,7 @@ pub(crate) fn validate_signature(sig: &Signature) -> Result<()> {
 	}
 
 	if let Some(variadic) = &sig.variadic {
-		return Err(Error::new_spanned(&variadic, "variadic not allowed"));
+		return Err(Error::new_spanned(variadic, "variadic not allowed"));
 	}
 
 	Ok(())

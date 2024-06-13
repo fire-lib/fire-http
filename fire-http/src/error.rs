@@ -91,7 +91,7 @@ impl fmt::Display for Error {
 
 impl StdError for Error {
 	fn source(&self) -> Option<&(dyn StdError + 'static)> {
-		self.source.as_ref().map(|e| e.source()).flatten()
+		self.source.as_ref().and_then(|e| e.source())
 	}
 }
 

@@ -48,6 +48,7 @@ pub trait Extractor<'a, R> {
 
 	fn validate(validate: Validate<'_>);
 
+	#[allow(clippy::type_complexity)]
 	fn prepare(
 		prepare: Prepare<'_>,
 	) -> Pin<

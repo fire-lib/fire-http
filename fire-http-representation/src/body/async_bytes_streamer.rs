@@ -92,7 +92,7 @@ impl Stream for Inner {
 			}
 			Self::Hyper(i) => Pin::new(i).poll_next(cx),
 			Self::SyncReader { reader, buf } => {
-				if buf.len() == 0 {
+				if buf.is_empty() {
 					*buf = BytesMut::zeroed(DEFAULT_CAP);
 				}
 
@@ -167,7 +167,7 @@ where
 
 		// pending
 		if let Some(timeout) = Option::as_pin_mut(me.timeout) {
-			if let Poll::Ready(_) = timeout.poll(cx) {
+			if timeout.poll(cx).is_ready() {
 				return Poll::Ready(Some(Err(timed_out(
 					"async bytes streamer took to long",
 				))));

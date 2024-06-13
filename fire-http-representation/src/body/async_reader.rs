@@ -151,7 +151,7 @@ impl<R: AsyncRead> AsyncRead for ConstrainedAsyncReader<R> {
 
 		// pending
 		if let Some(timeout) = Option::as_pin_mut(me.timeout) {
-			if let Poll::Ready(_) = timeout.poll(cx) {
+			if timeout.poll(cx).is_ready() {
 				return Poll::Ready(Err(timed_out("async reader took to long")));
 			}
 		}

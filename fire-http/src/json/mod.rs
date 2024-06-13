@@ -26,9 +26,9 @@ where
 	}
 }
 
-pub fn serialize_to_response<T: ?Sized>(data: &T) -> crate::Result<Response>
+pub fn serialize_to_response<T>(data: &T) -> crate::Result<Response>
 where
-	T: Serialize,
+	T: Serialize + ?Sized,
 {
 	let body = Body::serialize(data)
 		.map_err(|e| Error::new(ServerErrorKind::InternalServerError, e))?;

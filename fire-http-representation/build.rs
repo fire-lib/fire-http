@@ -72,36 +72,38 @@ const MIMES: &[(&str, bool, &[&str], &[&str])] = &[
 fn generate_mime(out_dir: &str) {
 	let dest_path = Path::new(&out_dir).join("mime.rs");
 
-	let mut value_enum = format!(
-		"\
+	let mut value_enum = "\
 		#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n\
-		enum MimeValue {{\n"
-	);
+		enum MimeValue {\n"
+		.to_string();
 
 	let mut mime_consts = String::new();
-	let mut from_extension_fn = format!(
-		"\tfn from_extension(e: &str) -> Option<Self> {{\n\
-		\t\tmatch e {{\n"
-	);
-	let mut from_str_fn = format!(
-		"\tfn from_str(s: &str) -> Option<Self> {{\n\
-		\t\tmatch s {{\n"
-	);
-	let mut extension_fn = format!(
-		"\tfn extension(&self) -> &'static str {{\n\
-		\t\tmatch self {{\n"
-	);
-	let mut as_str_fn = format!(
-		"\tfn as_str(&self) -> &'static str {{\n\
-		\t\tmatch self {{\n"
-	);
-	let mut as_str_with_maybe_charset = format!(
-		"\tfn as_str_with_maybe_charset(&self) -> &'static str {{\n\
-		\t\tmatch self {{\n"
-	);
+	let mut from_extension_fn =
+		"\tfn from_extension(e: &str) -> Option<Self> {\n\
+		\t\tmatch e {\n"
+			.to_string();
+	let mut from_str_fn = "\tfn from_str(s: &str) -> Option<Self> {\n\
+		\t\tmatch s {\n"
+		.to_string();
+	let mut extension_fn = "\tfn extension(&self) -> &'static str {\n\
+		\t\tmatch self {\n"
+		.to_string();
+	let mut as_str_fn = "\tfn as_str(&self) -> &'static str {\n\
+		\t\tmatch self {\n"
+		.to_string();
+	let mut as_str_with_maybe_charset =
+		"\tfn as_str_with_maybe_charset(&self) -> &'static str {\n\
+		\t\tmatch self {\n"
+			.to_string();
 
 	for (id, utf8, types, extensions) in MIMES {
-		write!(value_enum, "\t{id},\n").unwrap();
+		writeln!(
+			value_enum,
+			"\
+		\t#[allow(clippy::upper_case_acronyms)]\n\
+		\t{id},"
+		)
+		.unwrap();
 
 		write!(
 			mime_consts,
@@ -114,46 +116,46 @@ fn generate_mime(out_dir: &str) {
 		.unwrap();
 
 		for ext in *extensions {
-			write!(from_extension_fn, "\t\t\t\"{ext}\" => Some(Self::{id}),\n")
+			writeln!(from_extension_fn, "\t\t\t\"{ext}\" => Some(Self::{id}),")
 				.unwrap();
 		}
 
 		for ty in *types {
-			write!(from_str_fn, "\t\t\t\"{ty}\" => Some(Self::{id}),\n")
+			writeln!(from_str_fn, "\t\t\t\"{ty}\" => Some(Self::{id}),")
 				.unwrap();
 
 			if *utf8 {
-				write!(
+				writeln!(
 					from_str_fn,
-					"\t\t\t\"{ty}; charset=utf-8\" => Some(Self::{id}),\n"
+					"\t\t\t\"{ty}; charset=utf-8\" => Some(Self::{id}),"
 				)
 				.unwrap();
 			}
 		}
 
 		let ext = extensions.first().unwrap();
-		write!(extension_fn, "\t\t\tSelf::{id} => \"{ext}\",\n").unwrap();
+		writeln!(extension_fn, "\t\t\tSelf::{id} => \"{ext}\",").unwrap();
 
 		let ty = types.first().unwrap();
-		write!(as_str_fn, "\t\t\tSelf::{id} => \"{ty}\",\n").unwrap();
+		writeln!(as_str_fn, "\t\t\tSelf::{id} => \"{ty}\",").unwrap();
 
 		if *utf8 {
-			write!(
+			writeln!(
 				as_str_with_maybe_charset,
-				"\t\t\tSelf::{id} => \"{ty}; charset=utf-8\",\n"
+				"\t\t\tSelf::{id} => \"{ty}; charset=utf-8\","
 			)
 			.unwrap();
 		} else {
-			write!(
+			writeln!(
 				as_str_with_maybe_charset,
-				"\t\t\tSelf::{id} => \"{ty}\",\n"
+				"\t\t\tSelf::{id} => \"{ty}\","
 			)
 			.unwrap();
 		}
 	}
 
 	// now end functions
-	write!(value_enum, "}}\n").unwrap();
+	writeln!(value_enum, "}}").unwrap();
 
 	write!(
 		from_extension_fn,

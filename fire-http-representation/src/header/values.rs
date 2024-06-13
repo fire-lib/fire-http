@@ -78,14 +78,14 @@ impl HeaderValues {
 	/// Returns `None` if the value could not be serialized or inserted.
 	#[cfg(feature = "json")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-	pub fn serialize_value<K, V: ?Sized>(
+	pub fn serialize_value<K, V>(
 		&mut self,
 		key: K,
 		val: &V,
 	) -> Result<Option<HeaderValue>, JsonError>
 	where
 		K: IntoHeaderName,
-		V: serde::Serialize,
+		V: serde::Serialize + ?Sized,
 	{
 		let v = serde_json::to_string(val)?;
 		Ok(self.encode_value(key, v))
@@ -150,6 +150,12 @@ impl HeaderValues {
 	/// Returns the inner `HeaderMap`.
 	pub fn into_inner(self) -> http::HeaderMap<HeaderValue> {
 		self.0
+	}
+}
+
+impl Default for HeaderValues {
+	fn default() -> Self {
+		Self::new()
 	}
 }
 

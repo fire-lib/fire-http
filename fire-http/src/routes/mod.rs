@@ -95,3 +95,9 @@ impl Routes {
 		self.catcher.iter()
 	}
 }
+
+impl Default for Routes {
+	fn default() -> Self {
+		Self::new()
+	}
+}

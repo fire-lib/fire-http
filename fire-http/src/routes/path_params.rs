@@ -23,7 +23,7 @@ impl PathParams {
 	}
 
 	pub fn exists(&self, key: impl AsRef<str>) -> bool {
-		self.inner.get(key.as_ref()).is_some()
+		self.inner.contains_key(key.as_ref())
 	}
 
 	pub fn parse<T>(&self, key: impl AsRef<str>) -> Result<T, T::Err>
@@ -56,6 +56,7 @@ impl<'a> ParamsNames<'a> {
 
 		let mut list = HashSet::new();
 
+		#[allow(clippy::never_loop)]
 		'template_loop: loop {
 			parser.consume_while_byte_fn(|&b| b != b'{');
 			// either we're at the end or we found a {
@@ -75,10 +76,10 @@ impl<'a> ParamsNames<'a> {
 			loop {
 				parser.consume_while_byte_fn(|&b| b != b'}' && b != b'{');
 				match parser.peek() {
-					Some(b) if b == b'{' => {
+					Some(b'{') => {
 						panic!("unexpected {{");
 					}
-					Some(b) if b == b'}' => {
+					Some(b'}') => {
 						assert!(
 							!matches!(parser.peek_at(2), Some(b) if b == b'}'),
 							"escapping does not work in template string"

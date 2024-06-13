@@ -79,7 +79,7 @@ impl Request {
 			.take()
 			.deserialize()
 			.await
-			.map_err(|e| DeserializeError::Json(e))
+			.map_err(DeserializeError::Json)
 	}
 
 	#[cfg(feature = "query")]
@@ -91,7 +91,7 @@ impl Request {
 		let query = self.header().uri().query().unwrap_or("");
 
 		serde_urlencoded::from_str(query)
-			.map_err(|e| DeserializeError::UrlEncoded(e))
+			.map_err(DeserializeError::UrlEncoded)
 	}
 }
 
