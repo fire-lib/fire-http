@@ -81,4 +81,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.74.0
+          components: clippy
       - run: cargo clippy
